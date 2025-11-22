@@ -52,7 +52,8 @@ router.post('/share', async (req: Request, res: Response) => {
     notes.set(id, note);
 
     // Возвращаем ссылку
-    const shareUrl = `${process.env.PUBLIC_URL || 'http://localhost:3000'}/s/${id}`;
+    const publicUrl = process.env.PUBLIC_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+    const shareUrl = `${publicUrl}/s/${id}`;
 
     console.log(`✅ Note created: ${id} - "${title}"`);
 
