@@ -11,11 +11,10 @@ interface Note {
 }
 
 async function getNote(id: string): Promise<Note | null> {
-  const apiUrl = process.env.API_URL || 'http://localhost:4000';
-
   try {
-    const res = await fetch(`${apiUrl}/api/share/${id}`, {
-      cache: 'no-store', // Всегда актуальные данные
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const res = await fetch(`${baseUrl}/api/share/${id}`, {
+      cache: 'no-store',
     });
 
     if (!res.ok) {
