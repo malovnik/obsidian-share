@@ -2,15 +2,26 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
 
-// Подключение к PostgreSQL
-const connectionString = process.env.DATABASE_URL!;
+let _client: ReturnType<typeof postgres> | null = null;
+let _db: ReturnType<typeof drizzle> | null = null;
 
-if (!connectionString) {
-  throw new Error('DATABASE_URL is not set');
+function getDb() {
+  if (!_db) {
+    const connectionString = process.env.DATABASE_URL;
+
+    if (!connectionString) {
+      throw new Error('DATABASE_URL is not set');
+    }
+
+    _client = postgres(connectionString);
+    _db = drizzle(_client, { schema });
+  }
+
+  return _db;
 }
 
-// Создаём клиент postgres
-export const client = postgres(connectionString);
-
-// Создаём Drizzle ORM instance
-export const db = drizzle(client, { schema });
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_, prop) {
+    return getDb()[prop as keyof ReturnType<typeof drizzle>];
+  }
+});

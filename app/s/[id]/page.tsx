@@ -28,8 +28,9 @@ async function getNote(id: string): Promise<Note | null> {
   }
 }
 
-export default async function NotePage({ params }: { params: { id: string } }) {
-  const note = await getNote(params.id);
+export default async function NotePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const note = await getNote(id);
 
   if (!note) {
     notFound();
@@ -66,8 +67,9 @@ export default async function NotePage({ params }: { params: { id: string } }) {
 }
 
 // Metadata для SEO
-export async function generateMetadata({ params }: { params: { id: string } }) {
-  const note = await getNote(params.id);
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const note = await getNote(id);
 
   if (!note) {
     return {
