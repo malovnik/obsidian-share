@@ -27,7 +27,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const htmlContent = await marked(content);
+    // Убираем frontmatter из контента перед рендерингом
+    const { stripFrontmatter } = await import('@/app/lib/frontmatter');
+    const cleanContent = stripFrontmatter(content);
+    const htmlContent = await marked(cleanContent);
 
     let expiresAt = null;
     if (expiresInDays && expiresInDays > 0) {
