@@ -134,41 +134,6 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
     </div>
   );
 }
-        />
-
-        {/* Call-to-Action Block - Bottom */}
-        <div className="mt-12 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg p-8 border border-blue-100">
-          <div className="text-center">
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">
-              Понравилась статья?
-            </h3>
-            <p className="text-gray-700 mb-6">
-              Подписывайся на мой Telegram канал и получай доступ к бесплатному GPT боту без VPN и регистрации
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <a
-                href="https://t.me/malovkaif"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors shadow-md hover:shadow-lg"
-              >
-                📢 Присоединиться к каналу
-              </a>
-              <a
-                href="https://t.me/mnvgpt_bot"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors shadow-md hover:shadow-lg"
-              >
-                🤖 Попробовать GPT бот
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // Metadata для SEO
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
