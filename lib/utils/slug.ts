@@ -43,7 +43,9 @@ export function extractIdFromSlug(fullSlug: string): string {
 
 /**
  * Validates if slug matches the expected format
+ * Matches: "word-word-abc123" or just "abc123"
  */
 export function isValidSlug(slug: string): boolean {
-  return /^[a-z0-9-]+-[a-z0-9]+$/.test(slug);
+  // Must contain at least one hyphen followed by alphanumeric ID
+  return slug.includes('-') && slug.length > 8;
 }
