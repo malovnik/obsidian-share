@@ -2,8 +2,17 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
+  // Normalize double slashes in pathname (//api/share -> /api/share)
+  const pathname = request.nextUrl.pathname;
+  if (pathname.startsWith('//')) {
+    const normalizedPath = pathname.replace(/^\/+/, '/');
+    const url = request.nextUrl.clone();
+    url.pathname = normalizedPath;
+    return NextResponse.redirect(url, 301); // Permanent redirect
+  }
+
   // Handle CORS for API routes
-  if (request.nextUrl.pathname.startsWith('/api/')) {
+  if (pathname.startsWith('/api/')) {
     const response = NextResponse.next();
 
     response.headers.set('Access-Control-Allow-Origin', '*');
@@ -22,5 +31,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/api/:path*',
+  matcher: ['/api/:path*', '/:path*'],
 };
