@@ -44,6 +44,9 @@ export const notes = pgTable('notes', {
   // Удалена ли заметка
   isDeleted: boolean('is_deleted').default(false),
 
+  // Запретить индексацию поисковиками (приватная ссылка)
+  noIndex: boolean('no_index').default(false),
+
   // ID автора (опционально)
   authorId: text('author_id'),
 });

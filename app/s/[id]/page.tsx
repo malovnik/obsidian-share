@@ -141,13 +141,17 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const authorName = 'Малов Никита';
   const siteName = 'Obsidian Share - Заметки от Малова Никиты';
 
+  // Если приватная ссылка - запрещаем индексацию
+  const robotsContent = note.noIndex ? 'noindex, nofollow' : 'index, follow';
+
   return {
     title: `${note.title} | ${authorName}`,
     description,
     authors: [{ name: authorName }],
     creator: authorName,
     publisher: authorName,
-    keywords: [
+    robots: robotsContent,
+    keywords: note.noIndex ? [] : [
       note.title,
       'заметки',
       'obsidian',

@@ -16,7 +16,8 @@ export async function POST(request: NextRequest) {
       customCss,
       password,
       expiresInDays,
-      sourceId // Optional: Obsidian file path or UUID for tracking updates
+      sourceId, // Optional: Obsidian file path or UUID for tracking updates
+      noIndex = false // Optional: Disable search engine indexing for private shares
     } = body;
 
     if (!title || !content) {
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
           customCss,
           password,
           expiresAt,
+          noIndex,
           updatedAt: new Date(),
         })
         .where(eq(notes.id, existingNote.id))
@@ -89,6 +91,7 @@ export async function POST(request: NextRequest) {
           customCss,
           password,
           expiresAt,
+          noIndex,
         })
         .returning();
 
