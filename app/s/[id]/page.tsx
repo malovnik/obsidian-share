@@ -136,7 +136,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://read.malovnik.ru';
-  const url = `${baseUrl}/s/${id}`;
+  const url = `${baseUrl}/s/${idOrSlug}`;
   const description = note.content.substring(0, 160).replace(/[#*_`\[\]]/g, '');
   const authorName = 'Малов Никита';
   const siteName = 'Obsidian Share - Заметки от Малова Никиты';
