@@ -142,7 +142,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const siteName = 'Obsidian Share - Заметки от Малова Никиты';
 
   // Если приватная ссылка - запрещаем индексацию
-  const robotsContent = note.noIndex ? 'noindex, nofollow' : 'index, follow';
+  const noIndex = (note as any).noIndex || false;
 
   return {
     title: `${note.title} | ${authorName}`,
@@ -150,8 +150,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     authors: [{ name: authorName }],
     creator: authorName,
     publisher: authorName,
-    robots: robotsContent,
-    keywords: note.noIndex ? [] : [
+    keywords: noIndex ? [] : [
       note.title,
       'заметки',
       'obsidian',
@@ -196,11 +195,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
     // Robots
     robots: {
-      index: true,
-      follow: true,
+      index: !noIndex,
+      follow: !noIndex,
       googleBot: {
-        index: true,
-        follow: true,
+        index: !noIndex,
+        follow: !noIndex,
         'max-image-preview': 'large',
         'max-snippet': -1,
       },
