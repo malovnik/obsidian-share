@@ -38,8 +38,16 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
     notFound();
   }
 
+  // Get customCss from note
+  const customCss = (note as any).customCss || '';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Custom CSS from Obsidian theme */}
+      {customCss && (
+        <style dangerouslySetInnerHTML={{ __html: customCss }} />
+      )}
+      
       <div className="max-w-4xl mx-auto px-4 py-12">
         {/* Author Block - Top */}
         <div className="mb-8 bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
@@ -87,6 +95,45 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
         <article
           className="bg-white rounded-2xl shadow-xl p-8 md:p-12 markdown-body"
           dangerouslySetInnerHTML={{ __html: note.htmlContent }}
+        />
+
+        {/* Author Block - Bottom */}
+        <div className="mt-12 bg-white rounded-xl shadow-md p-8 border-t-4 border-blue-500">
+          <div className="text-center">
+            <div className="inline-flex w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full items-center justify-center text-white font-bold text-2xl mb-4 shadow-lg">
+              МН
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Малов Никита
+            </h2>
+            <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
+              Делюсь знаниями и опытом в области AI, разработки и продуктивности.
+              Подписывайтесь на мой Telegram канал и пользуйтесь бесплатным GPT без ВПН!
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <a
+                href="https://t.me/malovkaif"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors shadow-md hover:shadow-lg"
+              >
+                📢 Присоединиться к каналу
+              </a>
+              <a
+                href="https://t.me/mnvgpt_bot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors shadow-md hover:shadow-lg"
+              >
+                🤖 Попробовать GPT бот
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
         />
 
         {/* Call-to-Action Block - Bottom */}
