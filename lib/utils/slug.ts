@@ -9,13 +9,15 @@ import { transliterate, slugify } from 'transliteration';
  * - "React & Next.js Tutorial" → "react-nextjs-tutorial"
  */
 export function generateSlug(title: string): string {
-  return slugify(title, {
+  const slug = slugify(title, {
     lowercase: true,
     separator: '-',
     allowedChars: 'a-zA-Z0-9-',
-    truncate: 100, // Max 100 characters
     trim: true,
   });
+
+  // Truncate to max 100 characters
+  return slug.substring(0, 100);
 }
 
 /**
