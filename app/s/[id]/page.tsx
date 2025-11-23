@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { extractIdFromSlug, isValidSlug } from '@/lib/utils/slug';
 
 interface Note {
   id: string;
@@ -10,10 +11,11 @@ interface Note {
   createdAt: string;
 }
 
-async function getNote(id: string): Promise<Note | null> {
+async function getNote(idOrSlug: string): Promise<Note | null> {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const res = await fetch(`${baseUrl}/api/share/${id}`, {
+    // API route will handle both slug and ID formats
+    const res = await fetch(`${baseUrl}/api/share/${idOrSlug}`, {
       cache: 'no-store',
     });
 
@@ -29,8 +31,8 @@ async function getNote(id: string): Promise<Note | null> {
 }
 
 export default async function NotePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const note = await getNote(id);
+  const { id: idOrSlug } = await params;
+  const note = await getNote(idOrSlug);
 
   if (!note) {
     notFound();
@@ -39,6 +41,36 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-4xl mx-auto px-4 py-12">
+        {/* Author Block - Top */}
+        <div className="mb-8 bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+              МН
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-900">Автор: Малов Никита</h2>
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1 text-sm">
+                <a
+                  href="https://t.me/malovkaif"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
+                >
+                  📢 Telegram канал: @malovkaif
+                </a>
+                <a
+                  href="https://t.me/mnvgpt_bot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-green-600 hover:text-green-700 transition-colors flex items-center gap-1"
+                >
+                  🤖 Бесплатный GPT без ВПН
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Header */}
         <header className="mb-8">
           <h1 className="text-5xl font-bold text-gray-900 mb-4">
@@ -57,10 +89,35 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
           dangerouslySetInnerHTML={{ __html: note.htmlContent }}
         />
 
-        {/* Footer */}
-        <footer className="mt-12 text-center text-gray-500 text-sm">
-          <p>Создано с помощью Obsidian Share</p>
-        </footer>
+        {/* Call-to-Action Block - Bottom */}
+        <div className="mt-12 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-lg p-8 border border-blue-100">
+          <div className="text-center">
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">
+              Понравилась статья?
+            </h3>
+            <p className="text-gray-700 mb-6">
+              Подписывайся на мой Telegram канал и получай доступ к бесплатному GPT боту без VPN и регистрации
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <a
+                href="https://t.me/malovkaif"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors shadow-md hover:shadow-lg"
+              >
+                📢 Присоединиться к каналу
+              </a>
+              <a
+                href="https://t.me/mnvgpt_bot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors shadow-md hover:shadow-lg"
+              >
+                🤖 Попробовать GPT бот
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -68,17 +125,86 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
 
 // Metadata для SEO
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const note = await getNote(id);
+  const { id: idOrSlug } = await params;
+  const note = await getNote(idOrSlug);
 
   if (!note) {
     return {
-      title: 'Заметка не найдена',
+      title: 'Заметка не найдена | Obsidian Share',
+      description: 'Запрошенная заметка не найдена или была удалена',
     };
   }
 
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://read.malovnik.ru';
+  const url = `${baseUrl}/s/${id}`;
+  const description = note.content.substring(0, 160).replace(/[#*_`\[\]]/g, '');
+  const authorName = 'Малов Никита';
+  const siteName = 'Obsidian Share - Заметки от Малова Никиты';
+
   return {
-    title: note.title,
-    description: note.content.substring(0, 160),
+    title: `${note.title} | ${authorName}`,
+    description,
+    authors: [{ name: authorName }],
+    creator: authorName,
+    publisher: authorName,
+    keywords: [
+      note.title,
+      'заметки',
+      'obsidian',
+      'малов никита',
+      'личный блог',
+      'статьи',
+    ],
+
+    // Open Graph
+    openGraph: {
+      type: 'article',
+      url,
+      title: note.title,
+      description,
+      siteName,
+      locale: 'ru_RU',
+      publishedTime: note.createdAt,
+      authors: [authorName],
+      images: [
+        {
+          url: `${baseUrl}/og-image.png`, // TODO: Add dynamic OG image generation
+          width: 1200,
+          height: 630,
+          alt: note.title,
+        },
+      ],
+    },
+
+    // Twitter Card
+    twitter: {
+      card: 'summary_large_image',
+      title: note.title,
+      description,
+      creator: '@malovkaif',
+      images: [`${baseUrl}/og-image.png`],
+    },
+
+    // Yandex specific
+    other: {
+      'yandex-verification': process.env.YANDEX_VERIFICATION || '',
+    },
+
+    // Robots
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+      },
+    },
+
+    // Canonical URL
+    alternates: {
+      canonical: url,
+    },
   };
 }

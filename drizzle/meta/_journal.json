@@ -8,6 +8,13 @@
       "when": 1763886044080,
       "tag": "0000_jittery_master_mold",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1763888702981,
+      "tag": "0001_dry_the_captain",
+      "breakpoints": true
     }
   ]
 }

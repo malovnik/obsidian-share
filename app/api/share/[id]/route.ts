@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { notes } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { extractIdFromSlug, isValidSlug } from '@/lib/utils/slug';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { id: rawId } = await params;
     const password = request.nextUrl.searchParams.get('password');
+
+    // Extract actual ID from slug (supports both formats)
+    // Examples:
+    //   - "abc123" → "abc123" (old format)
+    //   - "kak-nauchitsya-programmirovat-abc123" → "abc123" (new format)
+    const id = isValidSlug(rawId) ? extractIdFromSlug(rawId) : rawId;
 
     const [note] = await db
       .select()

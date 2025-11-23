@@ -7,6 +7,12 @@ export const notes = pgTable('notes', {
   // Короткий ID для URL (например: abc123)
   id: text('id').primaryKey(),
 
+  // Slug для SEO-friendly URL (транслитерация заголовка)
+  slug: text('slug').notNull(),
+
+  // Source ID из Obsidian (путь к файлу или UUID для отслеживания обновлений)
+  sourceId: text('source_id'),
+
   // Название заметки
   title: text('title').notNull(),
 

@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import { marked } from 'marked';
+import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { notes } from '@/lib/db/schema';
+import { generateSlug, createFullSlug } from '@/lib/utils/slug';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { title, content, theme = 'default', customCss, password, expiresInDays } = body;
+    const {
+      title,
+      content,
+      theme = 'default',
+      customCss,
+      password,
+      expiresInDays,
+      sourceId // Optional: Obsidian file path or UUID for tracking updates
+    } = body;
 
     if (!title || !content) {
       return NextResponse.json(
@@ -16,7 +26,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const id = nanoid(8);
     const htmlContent = await marked(content);
 
     let expiresAt = null;
@@ -25,28 +34,78 @@ export async function POST(request: NextRequest) {
       expiresAt.setDate(expiresAt.getDate() + expiresInDays);
     }
 
-    const [note] = await db
-      .insert(notes)
-      .values({
-        id,
-        title,
-        content,
-        htmlContent,
-        theme,
-        customCss,
-        password,
-        expiresAt,
-      })
-      .returning();
+    // Check if note with this sourceId already exists (for updates)
+    let existingNote = null;
+    if (sourceId) {
+      const results = await db
+        .select()
+        .from(notes)
+        .where(eq(notes.sourceId, sourceId))
+        .limit(1);
+
+      existingNote = results[0];
+    }
+
+    let note;
+    let isUpdate = false;
+
+    if (existingNote) {
+      // Update existing note
+      isUpdate = true;
+      const slug = generateSlug(title);
+
+      const updated = await db
+        .update(notes)
+        .set({
+          title,
+          content,
+          htmlContent,
+          slug,
+          theme,
+          customCss,
+          password,
+          expiresAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(notes.id, existingNote.id))
+        .returning();
+
+      note = updated[0];
+    } else {
+      // Create new note
+      const id = nanoid(8);
+      const slug = generateSlug(title);
+
+      const inserted = await db
+        .insert(notes)
+        .values({
+          id,
+          slug,
+          sourceId,
+          title,
+          content,
+          htmlContent,
+          theme,
+          customCss,
+          password,
+          expiresAt,
+        })
+        .returning();
+
+      note = inserted[0];
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    const shareUrl = `${baseUrl}/s/${id}`;
+    const fullSlug = createFullSlug(note.title, note.id);
+    const shareUrl = `${baseUrl}/s/${fullSlug}`;
 
     return NextResponse.json({
       success: true,
       id: note.id,
+      slug: fullSlug,
       url: shareUrl,
       expiresAt: note.expiresAt,
+      isUpdate,
     });
   } catch (error) {
     console.error('Share error:', error);
