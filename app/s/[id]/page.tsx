@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
 import { extractIdFromSlug, isValidSlug } from '@/lib/utils/slug';
 
 interface Note {
@@ -49,6 +50,17 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
       )}
       
       <div className="max-w-4xl mx-auto px-4 py-12">
+        {/* "Все статьи" button - Top */}
+        <div className="mb-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors group"
+          >
+            <span className="transform group-hover:-translate-x-1 transition-transform">←</span>
+            <span>Смотреть все статьи</span>
+          </Link>
+        </div>
+
         {/* Author Block - Top */}
         <div className="mb-8 bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
           <div className="flex items-center gap-3">
@@ -81,7 +93,7 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
 
         {/* Header */}
         <header className="mb-8">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-4 break-words">
             {note.title}
           </h1>
           <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -93,12 +105,23 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
 
         {/* Content */}
         <article
-          className="bg-white rounded-2xl shadow-xl p-8 md:p-12 markdown-body"
+          className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 lg:p-12 markdown-body overflow-hidden"
           dangerouslySetInnerHTML={{ __html: note.htmlContent }}
         />
 
+        {/* "Читать другие статьи" button - Before Author Block */}
+        <div className="mt-12 mb-8 text-center">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold px-8 py-4 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+          >
+            <span>📚</span>
+            <span>Читать другие статьи</span>
+          </Link>
+        </div>
+
         {/* Author Block - Bottom */}
-        <div className="mt-12 bg-white rounded-xl shadow-md p-8 border-t-4 border-blue-500">
+        <div className="mt-8 bg-white rounded-xl shadow-md p-8 border-t-4 border-blue-500">
           <div className="text-center">
             <div className="inline-flex w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full items-center justify-center text-white font-bold text-2xl mb-4 shadow-lg">
               МН

@@ -5,18 +5,21 @@
 /* Markdown стили */
 .markdown-body {
   @apply text-gray-900 leading-relaxed;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
+/* Адаптивные заголовки для мобильных */
 .markdown-body h1 {
-  @apply text-4xl font-bold mb-6 mt-8;
+  @apply text-2xl sm:text-3xl md:text-4xl font-bold mb-6 mt-8;
 }
 
 .markdown-body h2 {
-  @apply text-3xl font-semibold mb-4 mt-6;
+  @apply text-xl sm:text-2xl md:text-3xl font-semibold mb-4 mt-6;
 }
 
 .markdown-body h3 {
-  @apply text-2xl font-medium mb-3 mt-5;
+  @apply text-lg sm:text-xl md:text-2xl font-medium mb-3 mt-5;
 }
 
 .markdown-body p {
@@ -40,11 +43,13 @@
 }
 
 .markdown-body pre {
-  @apply bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4;
+  @apply bg-gray-900 text-gray-100 p-3 sm:p-4 rounded-lg overflow-x-auto mb-4;
+  max-width: 100%;
 }
 
 .markdown-body pre code {
-  @apply bg-transparent p-0;
+  @apply bg-transparent p-0 text-xs sm:text-sm;
+  white-space: pre;
 }
 
 .markdown-body blockquote {
@@ -59,12 +64,24 @@
   @apply max-w-full h-auto rounded-lg my-4;
 }
 
+/* Таблицы с горизонтальной прокруткой на мобильных */
 .markdown-body table {
   @apply w-full border-collapse mb-4;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.markdown-body thead,
+.markdown-body tbody,
+.markdown-body tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
 }
 
 .markdown-body th, .markdown-body td {
-  @apply border border-gray-300 px-4 py-2;
+  @apply border border-gray-300 px-2 sm:px-4 py-2 text-sm sm:text-base;
 }
 
 .markdown-body th {
