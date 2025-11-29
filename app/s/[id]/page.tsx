@@ -32,23 +32,48 @@ async function getNote(idOrSlug: string): Promise<Note | null> {
   }
 }
 
+async function getNoteMeta(idOrSlug: string): Promise<{ noIndex: boolean } | null> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const res = await fetch(`${baseUrl}/api/share/${idOrSlug}/meta`, {
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    return res.json();
+  } catch (error) {
+    console.error('Failed to fetch note meta:', error);
+    return null;
+  }
+}
+
 export default async function NotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id: idOrSlug } = await params;
+
+  // Сначала проверяем ТОЛЬКО приватность статьи (без загрузки контента)
+  const meta = await getNoteMeta(idOrSlug);
+
+  if (!meta) {
+    notFound();
+  }
+
+  // Для приватных статей СРАЗУ возвращаем клиентский компонент
+  // БЕЗ загрузки контента на сервере
+  if (meta.noIndex) {
+    return <PrivateNotePage noteId={idOrSlug} />;
+  }
+
+  // Для публичных статей загружаем полный контент
   const note = await getNote(idOrSlug);
 
   if (!note) {
     notFound();
   }
 
-  // Get customCss and noIndex from note
   const customCss = (note as any).customCss || '';
-  const isPrivate = (note as any).noIndex || false;
-
-  // Для приватных статей используем клиентский компонент
-  // который НЕ отдаёт контент до проверки пинкода
-  if (isPrivate) {
-    return <PrivateNotePage noteId={idOrSlug} />;
-  }
 
   // Для публичных статей рендерим контент сразу на сервере
   return (
