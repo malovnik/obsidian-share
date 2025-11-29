@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { extractIdFromSlug, isValidSlug } from '@/lib/utils/slug';
-import PrivateNoteWrapper from '@/app/components/PrivateNoteWrapper';
+import PrivateNotePage from '@/app/components/PrivateNotePage';
 
 interface Note {
   id: string;
@@ -44,15 +44,21 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
   const customCss = (note as any).customCss || '';
   const isPrivate = (note as any).noIndex || false;
 
-  return (
-    <PrivateNoteWrapper isPrivate={isPrivate}>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        {/* Custom CSS from Obsidian theme */}
-        {customCss && (
-          <style dangerouslySetInnerHTML={{ __html: customCss }} />
-        )}
+  // Для приватных статей используем клиентский компонент
+  // который НЕ отдаёт контент до проверки пинкода
+  if (isPrivate) {
+    return <PrivateNotePage noteId={idOrSlug} />;
+  }
 
-        <div className="max-w-4xl mx-auto px-4 py-12">
+  // Для публичных статей рендерим контент сразу на сервере
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Custom CSS from Obsidian theme */}
+      {customCss && (
+        <style dangerouslySetInnerHTML={{ __html: customCss }} />
+      )}
+
+      <div className="max-w-4xl mx-auto px-4 py-12">
         {/* "Все статьи" button - Top */}
         <div className="mb-6">
           <Link
@@ -156,9 +162,8 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
         </div>
-        </div>
       </div>
-    </PrivateNoteWrapper>
+    </div>
   );
 }
 
