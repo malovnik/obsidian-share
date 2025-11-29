@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { extractIdFromSlug, isValidSlug } from '@/lib/utils/slug';
+import PrivateNoteWrapper from '@/app/components/PrivateNoteWrapper';
 
 interface Note {
   id: string;
@@ -39,17 +40,19 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
     notFound();
   }
 
-  // Get customCss from note
+  // Get customCss and noIndex from note
   const customCss = (note as any).customCss || '';
+  const isPrivate = (note as any).noIndex || false;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Custom CSS from Obsidian theme */}
-      {customCss && (
-        <style dangerouslySetInnerHTML={{ __html: customCss }} />
-      )}
-      
-      <div className="max-w-4xl mx-auto px-4 py-12">
+    <PrivateNoteWrapper isPrivate={isPrivate}>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        {/* Custom CSS from Obsidian theme */}
+        {customCss && (
+          <style dangerouslySetInnerHTML={{ __html: customCss }} />
+        )}
+
+        <div className="max-w-4xl mx-auto px-4 py-12">
         {/* "Все статьи" button - Top */}
         <div className="mb-6">
           <Link
@@ -153,8 +156,9 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </PrivateNoteWrapper>
   );
 }
 
@@ -223,20 +227,45 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       images: [`${baseUrl}/og-image.png`],
     },
 
-    // Yandex specific
+    // Yandex specific + AI crawlers blocking
     other: {
       'yandex-verification': process.env.YANDEX_VERIFICATION || '',
+      // Блокировка AI crawlers для приватных статей
+      ...(noIndex && {
+        // Perplexity AI
+        'PerplexityBot': 'noindex, nofollow',
+        // Anthropic Claude
+        'Claude-Web': 'noindex, nofollow',
+        // OpenAI GPT
+        'GPTBot': 'noindex, nofollow',
+        'ChatGPT-User': 'noindex, nofollow',
+        // Google Bard/Gemini
+        'Google-Extended': 'noindex, nofollow',
+        // Exa AI
+        'Exa': 'noindex, nofollow',
+        // Tavily AI
+        'TavilyBot': 'noindex, nofollow',
+        // Common AI crawlers
+        'CCBot': 'noindex, nofollow', // Common Crawl
+        'anthropic-ai': 'noindex, nofollow',
+        'ClaudeBot': 'noindex, nofollow',
+        'cohere-ai': 'noindex, nofollow',
+      }),
     },
 
-    // Robots
+    // Robots - блокируем поисковики и AI для приватных статей
     robots: {
       index: !noIndex,
       follow: !noIndex,
+      nocache: noIndex, // Запрет кэширования для приватных
+      noarchive: noIndex, // Запрет архивирования
+      nosnippet: noIndex, // Запрет показа сниппетов
+      noimageindex: noIndex, // Запрет индексации изображений
       googleBot: {
         index: !noIndex,
         follow: !noIndex,
-        'max-image-preview': 'large',
-        'max-snippet': -1,
+        'max-image-preview': noIndex ? 'none' : 'large',
+        'max-snippet': noIndex ? 0 : -1,
       },
     },
 

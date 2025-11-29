@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '10');
     const cursor = searchParams.get('cursor'); // ID последней заметки из предыдущей страницы
-    const includePrivate = searchParams.get('includePrivate') === 'true';
 
     // Валидация лимита
     const validLimit = Math.min(Math.max(limit, 1), 50); // От 1 до 50
@@ -19,10 +18,8 @@ export async function GET(request: NextRequest) {
     // Исключаем удаленные заметки
     conditions.push(eq(notes.isDeleted, false));
 
-    // Включаем только публичные если не указано иное
-    if (!includePrivate) {
-      conditions.push(eq(notes.noIndex, false));
-    }
+    // ВСЕГДА показываем только публичные статьи (noIndex = false)
+    conditions.push(eq(notes.noIndex, false));
 
     // Cursor-based пагинация
     if (cursor) {
