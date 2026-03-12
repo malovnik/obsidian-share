@@ -16,10 +16,9 @@ export async function GET(
   try {
     const { id: idOrSlug } = await params;
 
-    // Извлекаем ID из slug если нужно
     const noteId = extractIdFromSlug(idOrSlug);
+    const slugWithoutId = idOrSlug.replace(/-[^-]*$/, '');
 
-    // Ищем заметку по ID или slug
     const results = await db
       .select({
         id: notes.id,
@@ -30,7 +29,9 @@ export async function GET(
       .where(
         or(
           eq(notes.id, noteId),
-          eq(notes.slug, idOrSlug)
+          eq(notes.id, idOrSlug),
+          eq(notes.slug, idOrSlug),
+          eq(notes.slug, slugWithoutId)
         )
       )
       .limit(1);

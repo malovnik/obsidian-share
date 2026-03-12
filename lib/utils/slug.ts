@@ -70,13 +70,13 @@ export function createFullSlug(title: string, id: string): string {
 }
 
 /**
- * Extracts ID from full slug
+ * Extracts ID from full slug.
+ * ID is always 8 characters. New IDs use [A-Za-z0-9] only.
+ * Legacy IDs may contain `-` and `_` (nanoid default alphabet).
  *
- * Examples:
- * - "kak_nauchitsya_programmirovat-abc123" → "abc123"
- * - "hello_world-xyz789" → "xyz789"
- *
- * Note: ID is the last part after the final hyphen
+ * Strategy: try suffix after last `-`. If empty or slug has no `-`, return as-is.
+ * For legacy IDs containing `-` (e.g. `_-tlo1vO`), the simple lastIndexOf
+ * approach fails, so we also try the full slug as a raw ID.
  */
 export function extractIdFromSlug(fullSlug: string): string {
   const lastHyphenIndex = fullSlug.lastIndexOf('-');
@@ -85,7 +85,13 @@ export function extractIdFromSlug(fullSlug: string): string {
     return fullSlug;
   }
 
-  return fullSlug.substring(lastHyphenIndex + 1);
+  const candidate = fullSlug.substring(lastHyphenIndex + 1);
+
+  if (candidate.length > 0) {
+    return candidate;
+  }
+
+  return fullSlug;
 }
 
 /**

@@ -12,17 +12,29 @@ export async function GET(
     const { id: rawId } = await params;
     const password = request.nextUrl.searchParams.get('password');
 
-    // Extract actual ID from slug (supports both formats)
-    // Examples:
-    //   - "abc123" → "abc123" (old format)
-    //   - "kak-nauchitsya-programmirovat-abc123" → "abc123" (new format)
-    const id = isValidSlug(rawId) ? extractIdFromSlug(rawId) : rawId;
+    const extractedId = isValidSlug(rawId) ? extractIdFromSlug(rawId) : rawId;
 
-    const [note] = await db
+    let [note] = await db
       .select()
       .from(notes)
-      .where(eq(notes.id, id))
+      .where(eq(notes.id, extractedId))
       .limit(1);
+
+    if (!note) {
+      [note] = await db
+        .select()
+        .from(notes)
+        .where(eq(notes.slug, rawId.replace(/-[^-]*$/, '')))
+        .limit(1);
+    }
+
+    if (!note) {
+      [note] = await db
+        .select()
+        .from(notes)
+        .where(eq(notes.id, rawId))
+        .limit(1);
+    }
 
     if (!note || note.isDeleted) {
       return NextResponse.json(
@@ -35,7 +47,7 @@ export async function GET(
       await db
         .update(notes)
         .set({ isDeleted: true })
-        .where(eq(notes.id, id));
+        .where(eq(notes.id, note.id));
 
       return NextResponse.json(
         { error: 'Note has expired' },
@@ -53,7 +65,7 @@ export async function GET(
     await db
       .update(notes)
       .set({ viewCount: (note.viewCount || 0) + 1 })
-      .where(eq(notes.id, id));
+      .where(eq(notes.id, note.id));
 
     return NextResponse.json({
       id: note.id,

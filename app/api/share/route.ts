@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { nanoid } from 'nanoid';
+import { customAlphabet } from 'nanoid';
+
+const nanoid = customAlphabet('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', 8);
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { notes } from '@/lib/db/schema';
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
 
       note = updated[0];
     } else {
-      const id = nanoid(8);
+      const id = nanoid();
       const slug = generateSlug(title);
 
       const inserted = await db
