@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { extractIdFromSlug, isValidSlug } from '@/lib/utils/slug';
+import { stripFrontmatter } from '@/app/lib/frontmatter';
+import { stripMarkdown } from '@/lib/utils/markdown';
 import PrivateNotePage from '@/app/components/PrivateNotePage';
 
 interface Note {
@@ -192,9 +194,32 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
   );
 }
 
-// Metadata для SEO
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id: idOrSlug } = await params;
+
+  const meta = await getNoteMeta(idOrSlug);
+
+  if (!meta) {
+    return {
+      title: 'Заметка не найдена | Obsidian Share',
+      description: 'Запрошенная заметка не найдена или была удалена',
+    };
+  }
+
+  if (meta.noIndex) {
+    return {
+      title: 'Private Note',
+      description: 'This note is private.',
+      robots: {
+        index: false,
+        follow: false,
+        nocache: true,
+        noarchive: true,
+        nosnippet: true,
+      },
+    };
+  }
+
   const note = await getNote(idOrSlug);
 
   if (!note) {
@@ -206,12 +231,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://read.malovnik.ru';
   const url = `${baseUrl}/s/${idOrSlug}`;
-  const description = note.content.substring(0, 160).replace(/[#*_`\[\]]/g, '');
+  const cleanText = stripMarkdown(stripFrontmatter(note.content));
+  const description = cleanText.substring(0, 160);
   const authorName = 'Малов Никита';
   const siteName = 'Obsidian Share - Заметки от Малова Никиты';
-
-  // Если приватная ссылка - запрещаем индексацию
-  const noIndex = (note as any).noIndex || false;
 
   return {
     title: `${note.title} | ${authorName}`,
@@ -219,7 +242,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     authors: [{ name: authorName }],
     creator: authorName,
     publisher: authorName,
-    keywords: noIndex ? [] : [
+    keywords: [
       note.title,
       'заметки',
       'obsidian',
@@ -228,7 +251,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       'статьи',
     ],
 
-    // Open Graph
     openGraph: {
       type: 'article',
       url,
@@ -240,7 +262,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       authors: [authorName],
       images: [
         {
-          url: `${baseUrl}/og-image.png`, // TODO: Add dynamic OG image generation
+          url: `${baseUrl}/og-image.png`,
           width: 1200,
           height: 630,
           alt: note.title,
@@ -248,7 +270,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       ],
     },
 
-    // Twitter Card
     twitter: {
       card: 'summary_large_image',
       title: note.title,
@@ -257,49 +278,21 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       images: [`${baseUrl}/og-image.png`],
     },
 
-    // Yandex specific + AI crawlers blocking
     other: {
       'yandex-verification': process.env.YANDEX_VERIFICATION || '',
-      // Блокировка AI crawlers для приватных статей
-      ...(noIndex && {
-        // Perplexity AI
-        'PerplexityBot': 'noindex, nofollow',
-        // Anthropic Claude
-        'Claude-Web': 'noindex, nofollow',
-        // OpenAI GPT
-        'GPTBot': 'noindex, nofollow',
-        'ChatGPT-User': 'noindex, nofollow',
-        // Google Bard/Gemini
-        'Google-Extended': 'noindex, nofollow',
-        // Exa AI
-        'Exa': 'noindex, nofollow',
-        // Tavily AI
-        'TavilyBot': 'noindex, nofollow',
-        // Common AI crawlers
-        'CCBot': 'noindex, nofollow', // Common Crawl
-        'anthropic-ai': 'noindex, nofollow',
-        'ClaudeBot': 'noindex, nofollow',
-        'cohere-ai': 'noindex, nofollow',
-      }),
     },
 
-    // Robots - блокируем поисковики и AI для приватных статей
     robots: {
-      index: !noIndex,
-      follow: !noIndex,
-      nocache: noIndex, // Запрет кэширования для приватных
-      noarchive: noIndex, // Запрет архивирования
-      nosnippet: noIndex, // Запрет показа сниппетов
-      noimageindex: noIndex, // Запрет индексации изображений
+      index: true,
+      follow: true,
       googleBot: {
-        index: !noIndex,
-        follow: !noIndex,
-        'max-image-preview': noIndex ? 'none' : 'large',
-        'max-snippet': noIndex ? 0 : -1,
+        index: true,
+        follow: true,
+        'max-image-preview': 'large' as const,
+        'max-snippet': -1,
       },
     },
 
-    // Canonical URL
     alternates: {
       canonical: url,
     },
