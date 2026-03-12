@@ -1,3 +1,4 @@
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS no_index boolean DEFAULT false;
 ALTER TABLE notes ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}';
 ALTER TABLE notes ADD COLUMN IF NOT EXISTS reading_time integer DEFAULT 0;
 ALTER TABLE notes ADD COLUMN IF NOT EXISTS search_vector tsvector;
