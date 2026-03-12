@@ -20,7 +20,6 @@ export default function ArticleCard({
   readingTime,
   createdAt,
 }: ArticleCardProps) {
-  const fullSlug = `${slug}-${id}`;
   const formattedDate = new Date(createdAt).toLocaleDateString('ru-RU', {
     year: 'numeric',
     month: 'short',
@@ -29,7 +28,7 @@ export default function ArticleCard({
 
   return (
     <Link
-      href={`/s/${fullSlug}`}
+      href={`/s/${slug}`}
       className="group block hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
     >
       {/* Placeholder cover — black bg, white title */}

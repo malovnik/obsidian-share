@@ -1,7 +1,11 @@
 import 'dotenv/config';
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import postgres from 'postgres';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 async function setupSearch() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -13,10 +17,8 @@ async function setupSearch() {
   const sql = postgres(databaseUrl);
 
   console.log('Reading migration file...');
-  const migrationSql = readFileSync(
-    join(__dirname, '..', 'drizzle', '0002_add_search_and_tags.sql'),
-    'utf-8'
-  );
+  const migrationPath = resolve(__dirname, '..', 'drizzle', '0002_add_search_and_tags.sql');
+  const migrationSql = readFileSync(migrationPath, 'utf-8');
 
   console.log('Executing migration...');
   await sql.unsafe(migrationSql);
