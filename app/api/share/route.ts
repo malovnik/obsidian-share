@@ -27,10 +27,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Убираем frontmatter из контента перед рендерингом
-    const { stripFrontmatter } = await import('@/app/lib/frontmatter');
+    // Убираем frontmatter и извлекаем метаданные
+    const { stripFrontmatter, parseFrontmatter } = await import('@/app/lib/frontmatter');
     const cleanContent = stripFrontmatter(content);
     const htmlContent = await marked(cleanContent);
+
+    // Извлекаем теги из frontmatter
+    const { data: frontmatterData } = parseFrontmatter(content);
+    let tags: string[] = [];
+    if (Array.isArray(frontmatterData.tags)) {
+      tags = frontmatterData.tags.map((t: unknown) => String(t).trim()).filter(Boolean);
+    } else if (typeof frontmatterData.tags === 'string') {
+      tags = frontmatterData.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+    }
+
+    // Время чтения
+    const wordCount = cleanContent.trim().split(/\s+/).filter(Boolean).length;
+    const readingTime = Math.max(1, Math.ceil(wordCount / 200));
 
     let expiresAt = null;
     if (expiresInDays && expiresInDays > 0) {
@@ -70,6 +83,8 @@ export async function POST(request: NextRequest) {
           password,
           expiresAt,
           noIndex,
+          tags,
+          readingTime,
           updatedAt: new Date(),
         })
         .where(eq(notes.id, existingNote.id))
@@ -95,6 +110,8 @@ export async function POST(request: NextRequest) {
           password,
           expiresAt,
           noIndex,
+          tags,
+          readingTime,
         })
         .returning();
 
