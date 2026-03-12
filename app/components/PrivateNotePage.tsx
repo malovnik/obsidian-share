@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import PinCodeModal from './PinCodeModal';
+import ProgressBar from './ProgressBar';
+import ArticleSidebar from './ArticleSidebar';
 
 interface Note {
   id: string;
@@ -20,12 +22,10 @@ export default function PrivateNotePage({ noteId }: { noteId: string }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Проверяем sessionStorage при монтировании
     const verified = sessionStorage.getItem('pincode_verified');
     setIsUnlocked(verified === 'true');
     setIsChecking(false);
 
-    // Если разблокировано, загружаем заметку
     if (verified === 'true') {
       loadNote();
     }
@@ -51,124 +51,90 @@ export default function PrivateNotePage({ noteId }: { noteId: string }) {
     loadNote();
   };
 
-  // Показываем лоадер пока проверяем
   if (isChecking) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Проверка доступа...</p>
+          <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-gray-400 text-sm">Проверка доступа...</p>
         </div>
       </div>
     );
   }
 
-  // Если не разблокировано - показываем модал
   if (!isUnlocked) {
     return <PinCodeModal onSuccess={handleSuccess} />;
   }
 
-  // Загрузка заметки
   if (loading || !note) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Загрузка статьи...</p>
+          <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-gray-400 text-sm">Загрузка статьи...</p>
         </div>
       </div>
     );
   }
 
-  // Показываем контент
+  const formattedDate = new Date(note.createdAt).toLocaleDateString('ru-RU', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Custom CSS from Obsidian theme */}
+    <div className="min-h-screen bg-white">
+      <ProgressBar />
+
       {note.customCss && (
         <style dangerouslySetInnerHTML={{ __html: note.customCss }} />
       )}
 
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        {/* "Все статьи" button - Top */}
-        <div className="mb-6">
+      <div className="max-w-6xl mx-auto px-4 pt-8 pb-20">
+        <div className="mb-8">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors group"
+            className="inline-flex items-center gap-1.5 text-gray-400 hover:text-black text-sm transition-colors"
           >
-            <span className="transform group-hover:-translate-x-1 transition-transform">←</span>
-            <span>Смотреть все статьи</span>
+            <span>←</span>
+            <span>Все статьи</span>
           </Link>
         </div>
 
-        {/* Private badge */}
-        <div className="mb-8 bg-orange-50 border-l-4 border-orange-500 p-4 rounded-lg">
-          <div className="flex items-center gap-2 text-orange-800">
-            <span>🔒</span>
-            <span className="font-semibold">Приватная статья</span>
-          </div>
+        <div className="mb-6 border-l-2 border-black pl-4 py-1">
+          <span className="text-sm text-gray-500">Приватная заметка</span>
         </div>
 
-        {/* Header */}
-        <header className="mb-8">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-4 break-words">
-            {note.title}
-          </h1>
-          <div className="flex items-center gap-4 text-sm text-gray-600">
-            <span>👁️ {note.viewCount} просмотров</span>
-            <span>•</span>
-            <span>{new Date(note.createdAt).toLocaleDateString('ru-RU')}</span>
-          </div>
-        </header>
+        <div className="flex gap-12">
+          <main className="max-w-[680px] mx-auto w-full">
+            <header className="mb-10">
+              <h1 className="text-4xl font-semibold text-black tracking-tight mb-4 break-words">
+                {note.title}
+              </h1>
+              <div className="flex items-center gap-3 text-sm text-gray-400">
+                <span>{formattedDate}</span>
+                <span>·</span>
+                <span>{note.viewCount} просмотров</span>
+              </div>
+            </header>
 
-        {/* Content */}
-        <article
-          className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 lg:p-12 markdown-body overflow-hidden"
-          dangerouslySetInnerHTML={{ __html: note.htmlContent }}
-        />
+            <article
+              className="markdown-body"
+              dangerouslySetInnerHTML={{ __html: note.htmlContent }}
+            />
 
-        {/* "Читать другие статьи" button */}
-        <div className="mt-12 mb-8 text-center">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold px-8 py-4 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-          >
-            <span>📚</span>
-            <span>Читать другие статьи</span>
-          </Link>
-        </div>
-
-        {/* Author Block */}
-        <div className="mt-8 bg-white rounded-xl shadow-md p-8 border-t-4 border-blue-500">
-          <div className="text-center">
-            <div className="inline-flex w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full items-center justify-center text-white font-bold text-2xl mb-4 shadow-lg">
-              МН
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Малов Никита
-            </h2>
-            <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
-              Делюсь знаниями и опытом в области AI, разработки и продуктивности.
-              Подписывайтесь на мой Telegram канал и пользуйтесь бесплатным GPT без ВПН!
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <a
-                href="https://t.me/malovkaif"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors shadow-md hover:shadow-lg"
+            <div className="mt-16 pt-8 border-t border-gray-200">
+              <Link
+                href="/"
+                className="text-sm text-gray-400 hover:text-black transition-colors"
               >
-                📢 Присоединиться к каналу
-              </a>
-              <a
-                href="https://t.me/mnvgpt_bot"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors shadow-md hover:shadow-lg"
-              >
-                🤖 Попробовать GPT бот
-              </a>
+                ← Все статьи
+              </Link>
             </div>
-          </div>
+          </main>
+
+          <ArticleSidebar />
         </div>
       </div>
     </div>
