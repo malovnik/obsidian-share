@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
-import { marked } from 'marked';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { notes } from '@/lib/db/schema';
 import { generateSlug, createFullSlug } from '@/lib/utils/slug';
+import { processArticleContent } from '@/lib/utils/content';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
       customCss,
       password,
       expiresInDays,
-      sourceId, // Optional: Obsidian file path or UUID for tracking updates
-      noIndex = false // Optional: Disable search engine indexing for private shares
+      sourceId,
+      noIndex = false
     } = body;
 
     if (!title || !content) {
@@ -27,10 +27,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Убираем frontmatter из контента перед рендерингом
-    const { stripFrontmatter } = await import('@/app/lib/frontmatter');
-    const cleanContent = stripFrontmatter(content);
-    const htmlContent = await marked(cleanContent);
+    const processed = await processArticleContent(content);
 
     let expiresAt = null;
     if (expiresInDays && expiresInDays > 0) {
@@ -38,7 +35,6 @@ export async function POST(request: NextRequest) {
       expiresAt.setDate(expiresAt.getDate() + expiresInDays);
     }
 
-    // Check if note with this sourceId already exists (for updates)
     let existingNote = null;
     if (sourceId) {
       const results = await db
@@ -54,7 +50,6 @@ export async function POST(request: NextRequest) {
     let isUpdate = false;
 
     if (existingNote) {
-      // Update existing note
       isUpdate = true;
       const slug = generateSlug(title);
 
@@ -63,7 +58,7 @@ export async function POST(request: NextRequest) {
         .set({
           title,
           content,
-          htmlContent,
+          htmlContent: processed.htmlContent,
           slug,
           theme,
           customCss,
@@ -71,13 +66,13 @@ export async function POST(request: NextRequest) {
           expiresAt,
           noIndex,
           updatedAt: new Date(),
+          // tags and readingTime: schema columns added by Search Architect
         })
         .where(eq(notes.id, existingNote.id))
         .returning();
 
       note = updated[0];
     } else {
-      // Create new note
       const id = nanoid(8);
       const slug = generateSlug(title);
 
@@ -89,12 +84,13 @@ export async function POST(request: NextRequest) {
           sourceId,
           title,
           content,
-          htmlContent,
+          htmlContent: processed.htmlContent,
           theme,
           customCss,
           password,
           expiresAt,
           noIndex,
+          // tags and readingTime: schema columns added by Search Architect
         })
         .returning();
 
