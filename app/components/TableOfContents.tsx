@@ -57,25 +57,32 @@ export default function TableOfContents() {
   if (headings.length === 0) return null;
 
   return (
-    <nav className="space-y-1">
-      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
+    <nav>
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">
         Содержание
       </p>
-      {headings.map((heading) => (
-        <a
-          key={heading.id}
-          href={`#${heading.id}`}
-          className={`block text-sm leading-relaxed transition-colors ${
-            heading.level === 2 ? 'pl-0' : heading.level === 3 ? 'pl-3' : ''
-          } ${
-            activeId === heading.id
-              ? 'font-semibold text-black'
-              : 'text-gray-400 hover:text-gray-700'
-          }`}
-        >
-          {heading.text}
-        </a>
-      ))}
+      <ul className="space-y-0">
+        {headings.map((heading) => (
+          <li key={heading.id}>
+            <a
+              href={`#${heading.id}`}
+              className={`block py-1.5 text-[13px] leading-normal border-l-2 transition-all duration-150 ${
+                heading.level === 1
+                  ? 'pl-3'
+                  : heading.level === 2
+                    ? 'pl-3'
+                    : 'pl-6'
+              } ${
+                activeId === heading.id
+                  ? 'border-black text-black font-medium'
+                  : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300'
+              }`}
+            >
+              {heading.text}
+            </a>
+          </li>
+        ))}
+      </ul>
     </nav>
   );
 }

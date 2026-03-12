@@ -11,6 +11,14 @@ interface ArticleCardProps {
   viewCount: number;
 }
 
+function cleanTitle(title: string): string {
+  return title
+    .replace(/_/g, ' ')
+    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export default function ArticleCard({
   id,
   slug,
@@ -26,24 +34,24 @@ export default function ArticleCard({
     day: 'numeric',
   });
 
+  const displayTitle = cleanTitle(title);
+  const firstLetter = displayTitle.charAt(0).toUpperCase();
+
   return (
     <Link
       href={`/s/${slug}`}
-      className="group block hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
+      className="group block hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
     >
-      {/* Placeholder cover — black bg, white title */}
-      <div className="relative bg-black aspect-[16/9] md:aspect-[4/5] flex flex-col justify-end p-5">
-        <h3 className="text-white font-semibold text-lg leading-snug line-clamp-3">
-          {title}
+      <div className="relative bg-gray-50 border-2 border-black aspect-[16/9] flex items-center justify-center p-6 overflow-hidden">
+        <span className="absolute top-3 left-4 text-[72px] font-black text-black/[0.04] leading-none select-none">
+          {firstLetter}
+        </span>
+        <h3 className="text-black font-semibold text-base leading-snug line-clamp-3 text-center relative z-10">
+          {displayTitle}
         </h3>
-        <div className="mt-3 border-t border-white/30 w-full" />
       </div>
 
-      {/* Card body */}
-      <div className="border border-t-0 border-gray-200 p-4">
-        <h4 className="text-base font-semibold text-black line-clamp-2 mb-1.5">
-          {title}
-        </h4>
+      <div className="border-2 border-t-0 border-black p-4">
         <p className="text-sm text-gray-600 line-clamp-2 mb-3 leading-relaxed">
           {snippet}
         </p>

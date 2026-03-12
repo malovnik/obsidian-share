@@ -7,6 +7,7 @@ import { getRelatedArticles } from '@/lib/queries/related';
 import PrivateNotePage from '@/app/components/PrivateNotePage';
 import ProgressBar from '@/app/components/ProgressBar';
 import ArticleSidebar from '@/app/components/ArticleSidebar';
+import ReadingPosition from '@/app/components/ReadingPosition';
 
 interface Note {
   id: string;
@@ -98,6 +99,7 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
   return (
     <div className="min-h-screen bg-white">
       <ProgressBar />
+      <ReadingPosition articleId={note.id} />
 
       {customCss && (
         <style dangerouslySetInnerHTML={{ __html: customCss }} />
