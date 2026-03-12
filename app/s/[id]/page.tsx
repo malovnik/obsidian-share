@@ -223,7 +223,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://read.malovnik.ru';
   const url = `${baseUrl}/s/${idOrSlug}`;
-  const cleanText = stripMarkdown(stripFrontmatter(note.content));
+  const withoutFrontmatter = stripFrontmatter(note.content)
+    .replace(/^---[\s\S]*?---\s*/gm, '')
+    .replace(/^(shareurl|sharemode|cssclasses|tags|aliases|created|updated|publish):\s*.+$/gm, '')
+    .trim();
+  const cleanText = stripMarkdown(withoutFrontmatter);
   const description = cleanText.substring(0, 160);
   const authorName = 'Малов Никита';
   const siteName = 'Obsidian Share - Заметки от Малова Никиты';
