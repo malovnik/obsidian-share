@@ -2,15 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { sql } from 'drizzle-orm';
 import { stripFrontmatter } from '@/app/lib/frontmatter';
+import { stripMarkdown } from '@/lib/utils/markdown';
 import { createFullSlug } from '@/lib/utils/slug';
 import type { SearchResult, SearchResponse } from '@/types/contracts';
 
 function createSnippet(content: string): string {
   const clean = stripFrontmatter(content);
-  const stripped = clean
-    .replace(/[#*_\[\]]/g, '')
-    .replace(/\n+/g, ' ')
-    .trim();
+  const stripped = stripMarkdown(clean);
   if (stripped.length <= 200) return stripped;
   return stripped.substring(0, 200) + '...';
 }
