@@ -2,71 +2,126 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Markdown стили */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-white text-gray-900;
+  }
+
+  ::selection {
+    @apply bg-black text-white;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Markdown body styles — Hybrid Resonant Brutal */
 .markdown-body {
-  @apply text-gray-900 leading-relaxed;
+  @apply text-gray-900 leading-relaxed text-base;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
 
-/* Адаптивные заголовки для мобильных */
 .markdown-body h1 {
-  @apply text-2xl sm:text-3xl md:text-4xl font-bold mb-6 mt-8;
+  @apply text-2xl sm:text-3xl font-semibold text-black mb-6 mt-10 tracking-tight;
 }
 
 .markdown-body h2 {
-  @apply text-xl sm:text-2xl md:text-3xl font-semibold mb-4 mt-6;
+  @apply text-xl sm:text-2xl font-semibold text-black mb-4 mt-8 tracking-tight;
 }
 
 .markdown-body h3 {
-  @apply text-lg sm:text-xl md:text-2xl font-medium mb-3 mt-5;
+  @apply text-lg sm:text-xl font-medium text-black mb-3 mt-6;
+}
+
+.markdown-body h4 {
+  @apply text-base font-medium text-black mb-2 mt-5;
 }
 
 .markdown-body p {
-  @apply mb-4;
+  @apply mb-4 text-gray-800 leading-7;
 }
 
-.markdown-body ul, .markdown-body ol {
-  @apply ml-6 mb-4;
+.markdown-body ul,
+.markdown-body ol {
+  @apply ml-6 mb-4 space-y-1;
 }
 
 .markdown-body ul {
-  @apply list-disc;
+  list-style: none;
+}
+
+.markdown-body ul > li {
+  @apply relative pl-4;
+}
+
+.markdown-body ul > li::before {
+  content: '';
+  @apply absolute left-0 top-3 w-1 h-1 bg-black;
 }
 
 .markdown-body ol {
   @apply list-decimal;
 }
 
+.markdown-body ol > li {
+  @apply pl-1;
+}
+
+.markdown-body li {
+  @apply text-gray-800 leading-7;
+}
+
 .markdown-body code {
-  @apply bg-gray-100 px-2 py-1 rounded text-sm font-mono;
+  @apply bg-gray-100 px-1.5 py-0.5 text-sm font-mono text-gray-800;
 }
 
 .markdown-body pre {
-  @apply bg-gray-900 text-gray-100 p-3 sm:p-4 rounded-lg overflow-x-auto mb-4;
+  @apply bg-gray-950 text-gray-100 p-4 sm:p-5 rounded-none overflow-x-auto mb-6 border-t-2 border-black;
   max-width: 100%;
 }
 
 .markdown-body pre code {
-  @apply bg-transparent p-0 text-xs sm:text-sm;
+  @apply bg-transparent p-0 text-sm;
   white-space: pre;
 }
 
 .markdown-body blockquote {
-  @apply border-l-4 border-gray-300 pl-4 italic my-4;
+  @apply border-l-4 border-black pl-4 py-2 my-6 bg-gray-50 not-italic;
+}
+
+.markdown-body blockquote p {
+  @apply text-gray-700 mb-0;
 }
 
 .markdown-body a {
-  @apply text-blue-600 hover:underline;
+  @apply text-black underline underline-offset-2 hover:text-gray-600 transition-colors;
 }
 
 .markdown-body img {
-  @apply max-w-full h-auto rounded-lg my-4;
+  @apply max-w-full h-auto rounded-sm my-6;
 }
 
-/* Таблицы с горизонтальной прокруткой на мобильных */
+.markdown-body hr {
+  @apply border-0 border-t border-gray-200 my-8;
+}
+
+/* Tables with horizontal scroll on mobile */
 .markdown-body table {
-  @apply w-full border-collapse mb-4;
+  @apply w-full border-collapse mb-6;
   display: block;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -80,10 +135,35 @@
   table-layout: fixed;
 }
 
-.markdown-body th, .markdown-body td {
-  @apply border border-gray-300 px-2 sm:px-4 py-2 text-sm sm:text-base;
+.markdown-body th,
+.markdown-body td {
+  @apply border border-gray-200 px-3 sm:px-4 py-2 text-sm;
 }
 
 .markdown-body th {
-  @apply bg-gray-100 font-semibold;
+  @apply bg-gray-50 font-medium text-black text-left;
+}
+
+.markdown-body td {
+  @apply text-gray-700;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
 }

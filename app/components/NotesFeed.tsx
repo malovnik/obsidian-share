@@ -1,13 +1,20 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
+import ArticleCard from './ArticleCard';
+import CardSkeleton from './CardSkeleton';
+import SearchBar from './SearchBar';
+import TagFilter from './TagFilter';
+import type { TagInfo } from '@/types/contracts';
 
 interface Note {
   id: string;
   slug: string;
   title: string;
   snippet: string;
+  tags: string[];
+  readingTime: number;
   createdAt: string;
   updatedAt: string;
   viewCount: number;
@@ -24,18 +31,32 @@ interface NotesResponse {
 }
 
 export default function NotesFeed() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [cursor, setCursor] = useState<string | null>(null);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Note[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [tags, setTags] = useState<TagInfo[]>([]);
+  const [activeTags, setActiveTags] = useState<string[]>(() => {
+    const tagsParam = searchParams.get('tags');
+    return tagsParam ? tagsParam.split(',').filter(Boolean) : [];
+  });
+
   const loaderRef = useRef<HTMLDivElement>(null);
 
-  // Функция загрузки заметок
   const loadNotes = useCallback(async (nextCursor: string | null = null) => {
     try {
       setLoading(true);
       const url = new URL('/api/notes', window.location.origin);
-      url.searchParams.set('limit', '10');
+      url.searchParams.set('limit', '12');
       if (nextCursor) {
         url.searchParams.set('cursor', nextCursor);
       }
@@ -45,7 +66,13 @@ export default function NotesFeed() {
 
       const data: NotesResponse = await response.json();
 
-      setNotes((prev) => [...prev, ...data.notes]);
+      const normalizedNotes = data.notes.map((n) => ({
+        ...n,
+        tags: n.tags || [],
+        readingTime: n.readingTime || 0,
+      }));
+
+      setNotes((prev) => [...prev, ...normalizedNotes]);
       setHasMore(data.pagination.hasMore);
       setCursor(data.pagination.nextCursor);
     } catch (error) {
@@ -55,17 +82,85 @@ export default function NotesFeed() {
     }
   }, []);
 
-  // Загрузка первой страницы при монтировании
   useEffect(() => {
     loadNotes();
   }, [loadNotes]);
 
-  // Intersection Observer для infinite scroll
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const response = await fetch('/api/tags');
+        if (response.ok) {
+          const data = await response.json();
+          setTags(Array.isArray(data) ? data : data.tags || []);
+        }
+      } catch {
+        /* tags endpoint may not exist yet */
+      }
+    };
+    fetchTags();
+  }, []);
+
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const url = new URL('/api/search', window.location.origin);
+        url.searchParams.set('q', searchQuery);
+        if (activeTags.length > 0) {
+          url.searchParams.set('tags', activeTags.join(','));
+        }
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          const results = (data.notes || []).map((n: Note) => ({
+            ...n,
+            tags: n.tags || [],
+            readingTime: n.readingTime || 0,
+          }));
+          setSearchResults(results);
+        } else {
+          setSearchResults([]);
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery, activeTags]);
+
+  const handleTagToggle = (tag: string) => {
+    setActiveTags((prev) => {
+      const next = prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag];
+      const params = new URLSearchParams(searchParams.toString());
+      if (next.length > 0) {
+        params.set('tags', next.join(','));
+      } else {
+        params.delete('tags');
+      }
+      router.replace(`?${params.toString()}`, { scroll: false });
+      return next;
+    });
+  };
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         const first = entries[0];
-        if (first.isIntersecting && hasMore && !loading) {
+        if (first.isIntersecting && hasMore && !loading && !searchQuery) {
           loadNotes(cursor);
         }
       },
@@ -78,123 +173,77 @@ export default function NotesFeed() {
     }
 
     return () => {
-      if (currentLoader) {
-        observer.unobserve(currentLoader);
-      }
+      if (currentLoader) observer.unobserve(currentLoader);
     };
-  }, [hasMore, loading, cursor, loadNotes]);
+  }, [hasMore, loading, cursor, loadNotes, searchQuery]);
+
+  const displayNotes = searchResults !== null ? searchResults : notes;
+  const isLoading = searchResults !== null ? searching : loading;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
-      {/* Header */}
-      <header className="mb-12 text-center">
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 mb-4">
-          📝 Заметки Малова Никиты
+    <div className="max-w-6xl mx-auto px-4 pt-16 pb-20">
+      {/* Hero */}
+      <header className="text-center mb-12">
+        <h1 className="text-5xl font-light text-black tracking-tight mb-3">
+          Заметки
         </h1>
-        <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto">
-          Делюсь знаниями об AI, разработке, продуктивности и не только
+        <p className="text-gray-500 text-base mb-8">
+          Об AI, разработке, продуктивности и не только
         </p>
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          className="max-w-md mx-auto"
+        />
       </header>
 
-      {/* Notes Grid */}
-      <div className="space-y-6">
-        {notes.map((note) => {
-          const fullSlug = `${note.slug}-${note.id}`;
-          const formattedDate = new Date(note.createdAt).toLocaleDateString('ru-RU', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          });
-
-          return (
-            <Link
-              key={note.id}
-              href={`/s/${fullSlug}`}
-              className="block bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 sm:p-8 border-l-4 border-blue-500 hover:border-indigo-600 group"
-            >
-              {/* Title */}
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors break-words">
-                {note.title}
-              </h2>
-
-              {/* Snippet */}
-              <p className="text-gray-700 mb-4 line-clamp-3 leading-relaxed">
-                {note.snippet}
-              </p>
-
-              {/* Metadata */}
-              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                <span className="flex items-center gap-1">
-                  📅 {formattedDate}
-                </span>
-                <span className="flex items-center gap-1">
-                  👁️ {note.viewCount} просмотров
-                </span>
-                {note.isPrivate && (
-                  <span className="flex items-center gap-1 text-orange-600 font-medium">
-                    🔒 Приватная
-                  </span>
-                )}
-              </div>
-
-              {/* Read More */}
-              <div className="mt-4 flex items-center gap-2 text-blue-600 font-semibold group-hover:gap-3 transition-all">
-                <span>Читать далее</span>
-                <span className="transform group-hover:translate-x-1 transition-transform">→</span>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Loading / End indicator */}
-      <div ref={loaderRef} className="mt-8 text-center py-8">
-        {loading && (
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-gray-600">Загрузка заметок...</p>
-          </div>
-        )}
-        {!loading && !hasMore && notes.length > 0 && (
-          <div className="text-gray-500 text-lg">
-            🎉 Вы просмотрели все заметки!
-          </div>
-        )}
-        {!loading && notes.length === 0 && (
-          <div className="text-gray-500 text-lg">
-            📭 Пока нет опубликованных заметок
-          </div>
-        )}
-      </div>
-
-      {/* Author CTA */}
-      <div className="mt-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-xl p-8 sm:p-12 text-white">
-        <div className="text-center max-w-2xl mx-auto">
-          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Хотите больше?
-          </h2>
-          <p className="text-lg sm:text-xl mb-8 opacity-90">
-            Подписывайтесь на мой Telegram канал и пользуйтесь бесплатным GPT без ВПН!
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
-              href="https://t.me/malovkaif"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 bg-white text-blue-600 font-bold px-8 py-4 rounded-lg hover:bg-gray-100 transition-colors shadow-lg hover:shadow-xl"
-            >
-              📢 Telegram канал
-            </a>
-            <a
-              href="https://t.me/mnvgpt_bot"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 bg-green-500 text-white font-bold px-8 py-4 rounded-lg hover:bg-green-600 transition-colors shadow-lg hover:shadow-xl"
-            >
-              🤖 Бесплатный GPT
-            </a>
-          </div>
+      {/* Tag filter */}
+      {tags.length > 0 && (
+        <div className="mb-8">
+          <TagFilter tags={tags} activeTags={activeTags} onToggle={handleTagToggle} />
         </div>
+      )}
+
+      {/* Cards grid */}
+      {isLoading && displayNotes.length === 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      ) : displayNotes.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayNotes.map((note) => (
+            <ArticleCard
+              key={note.id}
+              id={note.id}
+              slug={note.slug}
+              title={note.title}
+              snippet={note.snippet}
+              tags={note.tags}
+              readingTime={note.readingTime}
+              createdAt={note.createdAt}
+              viewCount={note.viewCount}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-20 text-gray-400 text-lg">
+          Ничего не найдено
+        </div>
+      )}
+
+      {/* Infinite scroll loader */}
+      <div ref={loaderRef} className="mt-10 text-center py-8">
+        {isLoading && displayNotes.length > 0 && (
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-gray-500">Загрузка...</span>
+          </div>
+        )}
+        {!isLoading && !hasMore && notes.length > 0 && !searchQuery && (
+          <p className="text-gray-400 text-sm">Все заметки загружены</p>
+        )}
       </div>
     </div>
   );
