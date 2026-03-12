@@ -77,6 +77,7 @@ export default function NotesFeed() {
       setCursor(data.pagination.nextCursor);
     } catch (error) {
       console.error('Failed to load notes:', error);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
