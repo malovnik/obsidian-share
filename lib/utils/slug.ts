@@ -1,47 +1,71 @@
-import { transliterate, slugify } from 'transliteration';
+import { transliterate } from 'transliteration';
 
 /**
- * Generates SEO-friendly slug from title
+ * Generates SEO-friendly slug from title with comprehensive sanitization.
+ *
+ * Steps:
+ * 1. Unicode NFD normalization + strip diacritics
+ * 2. Transliterate non-latin chars via `transliteration` library
+ * 3. Replace ALL non-alphanumeric chars with underscores
+ * 4. Collapse multiple underscores, trim edges
+ * 5. Lowercase, truncate to 100 chars (avoid cutting mid-word)
  *
  * Examples:
  * - "Как научиться программировать" → "kak_nauchitsya_programmirovat"
  * - "Hello World! Привет Мир" → "hello_world_privet_mir"
- * - "React & Next.js Tutorial" → "react_nextjs_tutorial"
- * - "Заголовок - подзаголовок" → "zagolovok_podzagolovok"
+ * - "React & Next.js Tutorial" → "react_next_js_tutorial"
+ * - "Title — with em-dash" → "title_with_em_dash"
+ * - "🔥🚀 Emoji Title" → "emoji_title"
  */
 export function generateSlug(title: string): string {
-  // Шаг 1: Транслитерация кириллицы в латиницу
-  let processed = transliterate(title);
+  let processed = title;
 
-  // Шаг 2: Заменяем пробелы на подчеркивания
-  processed = processed.replace(/\s+/g, '_');
+  // Step 1: Unicode NFD normalization — decompose combined chars, then strip diacritics
+  processed = processed.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  // Шаг 3: Удаляем все спецсимволы, оставляя только буквы, цифры и подчеркивания
-  processed = processed.replace(/[^a-zA-Z0-9_]/g, '');
+  // Step 2: Transliterate non-latin characters (Cyrillic, CJK, etc.)
+  processed = transliterate(processed);
 
-  // Шаг 4: Убираем множественные подчеркивания подряд
+  // Step 3: Replace ALL non-alphanumeric characters with underscores
+  // This handles em-dash, en-dash, quotes, brackets, emoji remnants, dots, commas, etc.
+  processed = processed.replace(/[^a-zA-Z0-9]/g, '_');
+
+  // Step 4: Collapse multiple underscores into one
   processed = processed.replace(/_+/g, '_');
 
-  // Шаг 5: Убираем подчеркивания в начале и конце
+  // Step 5: Trim leading/trailing underscores
   processed = processed.replace(/^_+|_+$/g, '');
 
-  // Шаг 6: Приводим к нижнему регистру
+  // Step 6: Lowercase
   processed = processed.toLowerCase();
 
-  // Truncate to max 100 characters
-  return processed.substring(0, 100);
+  // Step 7: Truncate to 100 chars without cutting mid-word
+  if (processed.length > 100) {
+    const truncated = processed.substring(0, 100);
+    const lastUnderscore = truncated.lastIndexOf('_');
+    if (lastUnderscore > 0) {
+      processed = truncated.substring(0, lastUnderscore);
+    } else {
+      processed = truncated;
+    }
+  }
+
+  return processed;
 }
 
 /**
  * Creates full slug with ID for URL
- * Format: {slug}-{id}
+ * Format: {slug}-{id} or just {id} if slug is empty (e.g. emoji-only titles)
  *
- * Example: "kak_nauchitsya_programmirovat-abc123"
- * Note: Slug uses underscores, ID is separated by hyphen
+ * Examples:
+ * - "kak_nauchitsya_programmirovat", "abc123" → "kak_nauchitsya_programmirovat-abc123"
+ * - "", "abc123" → "abc123" (emoji-only title produced empty slug)
  */
 export function createFullSlug(title: string, id: string): string {
   const slug = generateSlug(title);
-  // Используем дефис как разделитель между slug и ID
+  if (!slug) {
+    return id;
+  }
   return `${slug}-${id}`;
 }
 
@@ -55,25 +79,19 @@ export function createFullSlug(title: string, id: string): string {
  * Note: ID is the last part after the final hyphen
  */
 export function extractIdFromSlug(fullSlug: string): string {
-  // Ищем последний дефис (разделитель между slug и ID)
   const lastHyphenIndex = fullSlug.lastIndexOf('-');
 
   if (lastHyphenIndex === -1) {
-    // Если нет дефиса, возвращаем всю строку (backward compatibility)
     return fullSlug;
   }
 
-  // Возвращаем всё после последнего дефиса
   return fullSlug.substring(lastHyphenIndex + 1);
 }
 
 /**
  * Validates if slug matches the expected format
  * Matches: "word_word-abc123" or just "abc123"
- * Note: Slug uses underscores, ID separated by hyphen
  */
 export function isValidSlug(slug: string): boolean {
-  // Must contain at least one hyphen (separator) and be at least 8 chars
-  // Valid formats: "slug_text-id123" or "abc123" (backward compatibility)
   return slug.length >= 8 && (slug.includes('-') || /^[a-z0-9]+$/i.test(slug));
 }
