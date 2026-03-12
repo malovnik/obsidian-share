@@ -14,7 +14,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:backfill": "npx tsx scripts/backfill.ts"
+    "db:backfill": "npx tsx scripts/backfill.ts",
+    "db:setup-search": "npx tsx scripts/setup-search.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.36.4",
