@@ -17,18 +17,10 @@ async function backfill() {
   let updated = 0;
 
   for (const note of allNotes) {
-    const { data, content: cleanContent } = parseFrontmatter(note.content);
-
-    const rawTags = data.tags;
-    let tags: string[] = [];
-    if (Array.isArray(rawTags)) {
-      tags = rawTags.map((t: unknown) => String(t).trim()).filter(Boolean);
-    } else if (typeof rawTags === 'string') {
-      tags = rawTags.split(',').map((t: string) => t.trim()).filter(Boolean);
-    }
+    const { tags, content: cleanContent } = parseFrontmatter(note.content);
 
     const wordCount = cleanContent.trim().split(/\s+/).filter(Boolean).length;
-    const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+    const readingTime = Math.max(1, Math.round(wordCount / 200));
 
     await db.update(notes)
       .set({ tags, readingTime })

@@ -1,3 +1,5 @@
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}';
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS reading_time integer DEFAULT 0;
 ALTER TABLE notes ADD COLUMN IF NOT EXISTS search_vector tsvector;
 
 CREATE INDEX IF NOT EXISTS idx_notes_search ON notes USING GIN(search_vector);
