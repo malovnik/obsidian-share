@@ -33,7 +33,7 @@ export default function ArticleCard({
       className="group block hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
     >
       {/* Placeholder cover — black bg, white title */}
-      <div className="relative bg-black aspect-[4/5] flex flex-col justify-end p-5">
+      <div className="relative bg-black aspect-[16/9] md:aspect-[4/5] flex flex-col justify-end p-5">
         <h3 className="text-white font-semibold text-lg leading-snug line-clamp-3">
           {title}
         </h3>

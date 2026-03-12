@@ -12,8 +12,17 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Obsidian Share',
-  description: 'Публичные заметки из Obsidian',
+  title: {
+    default: 'Малов Никита — Заметки',
+    template: '%s',
+  },
+  description: 'Заметки об AI, разработке, продуктивности и не только',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://read.malovnik.ru'),
+  openGraph: {
+    type: 'website',
+    locale: 'ru_RU',
+    siteName: 'Малов Никита — Заметки',
+  },
 };
 
 export default function RootLayout({

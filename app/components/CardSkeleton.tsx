@@ -2,7 +2,7 @@ export default function CardSkeleton() {
   return (
     <div className="border border-black">
       {/* Cover skeleton */}
-      <div className="aspect-[4/5] bg-gray-100 animate-pulse" />
+      <div className="aspect-[16/9] md:aspect-[4/5] bg-gray-100 animate-pulse" />
 
       {/* Body skeleton */}
       <div className="p-4 space-y-3">
