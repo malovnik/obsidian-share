@@ -14,7 +14,6 @@ export default function PinCodeModal({ onSuccess }: PinCodeModalProps) {
   const [shake, setShake] = useState(false);
 
   useEffect(() => {
-    // Блокируем скролл страницы когда модал открыт
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = 'unset';
@@ -25,7 +24,6 @@ export default function PinCodeModal({ onSuccess }: PinCodeModalProps) {
     e.preventDefault();
 
     if (pin === CORRECT_PIN) {
-      // Сохраняем в sessionStorage для текущей сессии
       sessionStorage.setItem('pincode_verified', 'true');
       onSuccess();
     } else {
@@ -37,7 +35,7 @@ export default function PinCodeModal({ onSuccess }: PinCodeModalProps) {
   };
 
   const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, ''); // Только цифры
+    const value = e.target.value.replace(/\D/g, '');
     if (value.length <= 4) {
       setPin(value);
       setError(false);
@@ -47,28 +45,18 @@ export default function PinCodeModal({ onSuccess }: PinCodeModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
       <div
-        className={`bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 transform transition-all ${
+        className={`bg-white border-2 border-black max-w-sm w-full p-8 transition-all ${
           shake ? 'animate-shake' : ''
         }`}
       >
-        {/* Icon */}
-        <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center shadow-lg">
-            <span className="text-3xl">🔒</span>
-          </div>
-        </div>
-
-        {/* Title */}
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-2">
-          Приватная статья
+        <h2 className="text-xl font-semibold text-black text-center mb-2">
+          Введите PIN-код
         </h2>
-        <p className="text-gray-600 text-center mb-6">
-          Введите пинкод для доступа к материалу
+        <p className="text-gray-500 text-sm text-center mb-6">
+          Для доступа к приватному материалу
         </p>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* PIN Input */}
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <input
               type="text"
@@ -76,78 +64,45 @@ export default function PinCodeModal({ onSuccess }: PinCodeModalProps) {
               pattern="[0-9]*"
               value={pin}
               onChange={handlePinChange}
-              placeholder="••••"
+              placeholder="----"
               maxLength={4}
               autoFocus
-              className={`w-full text-center text-3xl sm:text-4xl font-bold tracking-widest px-6 py-4 rounded-xl border-2 transition-all focus:outline-none focus:ring-4 ${
+              className={`w-full text-center text-3xl font-semibold tracking-[0.5em] px-6 py-4 border-2 rounded-none transition-all focus:outline-none ${
                 error
-                  ? 'border-red-500 bg-red-50 focus:ring-red-200'
-                  : 'border-gray-300 bg-gray-50 focus:border-blue-500 focus:ring-blue-200'
+                  ? 'border-gray-900 bg-gray-50'
+                  : 'border-black bg-white focus:shadow-[0_0_0_1px_black]'
               }`}
             />
             {error && (
-              <p className="text-red-600 text-sm mt-2 text-center animate-fadeIn">
-                ❌ Неверный пинкод. Попробуйте снова.
+              <p className="text-gray-700 text-sm mt-2 text-center animate-fadeIn">
+                Неверный PIN-код. Попробуйте снова.
               </p>
             )}
           </div>
 
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={pin.length !== 4}
-            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+            className="w-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium py-3 px-6 rounded-none transition-colors"
           >
-            {pin.length === 4 ? '✓ Открыть' : 'Введите 4 цифры'}
+            {pin.length === 4 ? 'Открыть' : 'Введите 4 цифры'}
           </button>
         </form>
 
-        {/* Help Text */}
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <p className="text-sm text-gray-600 text-center mb-3">
-            Нет пинкода или забыли его?
+        <div className="mt-6 pt-5 border-t border-gray-200">
+          <p className="text-xs text-gray-400 text-center mb-3">
+            Нет PIN-кода?
           </p>
           <a
             href="https://t.me/mlvnik"
             target="_blank"
             rel="noopener noreferrer"
-            className="block w-full text-center bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg transition-colors"
+            className="block w-full text-center border border-gray-200 hover:border-black text-gray-700 text-sm py-2.5 px-4 rounded-none transition-colors"
           >
-            📱 Написать @mlvnik
+            Написать @mlvnik
           </a>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-
-        @keyframes shake {
-          0%, 100% {
-            transform: translateX(0);
-          }
-          25% {
-            transform: translateX(-10px);
-          }
-          75% {
-            transform: translateX(10px);
-          }
-        }
-
-        .animate-fadeIn {
-          animation: fadeIn 0.2s ease-out;
-        }
-
-        .animate-shake {
-          animation: shake 0.4s ease-in-out;
-        }
-      `}</style>
     </div>
   );
 }
