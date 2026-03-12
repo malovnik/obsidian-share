@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { extractIdFromSlug, isValidSlug } from '@/lib/utils/slug';
+import { extractIdFromSlug, isValidSlug, createFullSlug } from '@/lib/utils/slug';
 import { stripFrontmatter } from '@/app/lib/frontmatter';
 import { stripMarkdown } from '@/lib/utils/markdown';
+import { getRelatedArticles } from '@/lib/queries/related';
 import PrivateNotePage from '@/app/components/PrivateNotePage';
 import ProgressBar from '@/app/components/ProgressBar';
 import ArticleSidebar from '@/app/components/ArticleSidebar';
@@ -15,6 +16,7 @@ interface Note {
   theme: string;
   viewCount: number;
   createdAt: string;
+  tags: string[] | null;
 }
 
 async function getNote(idOrSlug: string): Promise<Note | null> {
@@ -78,6 +80,14 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
   }
 
   const customCss = (note as any).customCss || '';
+  const noteTags = note.tags ?? [];
+
+  let relatedArticles: { id: string; slug: string; title: string; tags: string[] }[] = [];
+  try {
+    relatedArticles = await getRelatedArticles(note.id, noteTags, 3);
+  } catch {
+    /* related articles are optional — DB may not have tags column yet */
+  }
 
   const formattedDate = new Date(note.createdAt).toLocaleDateString('ru-RU', {
     year: 'numeric',
@@ -115,6 +125,15 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
                 <span>·</span>
                 <span>{note.viewCount} просмотров</span>
               </div>
+              {noteTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-4">
+                  {noteTags.map((tag) => (
+                    <span key={tag} className="bg-gray-100 text-gray-700 rounded-sm px-2 py-0.5 text-xs">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </header>
 
             <article
@@ -122,7 +141,33 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
               dangerouslySetInnerHTML={{ __html: note.htmlContent }}
             />
 
-            <div className="mt-16 pt-8 border-t border-gray-200">
+            {relatedArticles.length > 0 && (
+              <section className="mt-16 pt-8 border-t border-gray-200">
+                <h2 className="text-lg font-semibold text-black mb-4">Похожие статьи</h2>
+                <div className="space-y-3">
+                  {relatedArticles.map((related) => (
+                    <Link
+                      key={related.id}
+                      href={`/s/${related.slug}`}
+                      className="block group"
+                    >
+                      <span className="text-base text-black group-hover:text-gray-600 transition-colors">
+                        {related.title}
+                      </span>
+                      {related.tags.length > 0 && (
+                        <div className="flex gap-1 mt-1">
+                          {related.tags.slice(0, 3).map((tag) => (
+                            <span key={tag} className="text-xs text-gray-400">{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <div className="mt-12 pt-8 border-t border-gray-200">
               <Link
                 href="/"
                 className="text-sm text-gray-400 hover:text-black transition-colors"
