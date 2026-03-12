@@ -1,5 +1,11 @@
-import { pgTable, text, timestamp, integer, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, integer, boolean, customType } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
 
 /**
  * Таблица с опубликованными заметками
@@ -56,6 +62,9 @@ export const notes = pgTable('notes', {
 
   // Время чтения в минутах
   readingTime: integer('reading_time').default(0),
+
+  // Полнотекстовый поиск (заполняется триггером)
+  searchVector: tsvector('search_vector'),
 });
 
 export type Note = typeof notes.$inferSelect;
