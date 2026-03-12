@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, integer, boolean } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 /**
  * Таблица с опубликованными заметками
@@ -49,6 +50,12 @@ export const notes = pgTable('notes', {
 
   // ID автора (опционально)
   authorId: text('author_id'),
+
+  // Теги из frontmatter
+  tags: text('tags').array().default(sql`'{}'::text[]`),
+
+  // Время чтения в минутах
+  readingTime: integer('reading_time').default(0),
 });
 
 export type Note = typeof notes.$inferSelect;

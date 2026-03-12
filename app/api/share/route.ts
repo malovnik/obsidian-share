@@ -65,8 +65,9 @@ export async function POST(request: NextRequest) {
           password,
           expiresAt,
           noIndex,
+          tags: processed.tags,
+          readingTime: processed.readingTime,
           updatedAt: new Date(),
-          // tags and readingTime: schema columns added by Search Architect
         })
         .where(eq(notes.id, existingNote.id))
         .returning();
@@ -90,7 +91,8 @@ export async function POST(request: NextRequest) {
           password,
           expiresAt,
           noIndex,
-          // tags and readingTime: schema columns added by Search Architect
+          tags: processed.tags,
+          readingTime: processed.readingTime,
         })
         .returning();
 
