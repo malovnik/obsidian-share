@@ -1,11 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface HeadingItem {
   id: string;
   text: string;
   level: number;
+}
+
+function slugify(text: string): string {
+  const translitMap: Record<string, string> = {
+    а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'zh',
+    з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o',
+    п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts',
+    ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
+  };
+
+  return text
+    .toLowerCase()
+    .split('')
+    .map((char) => translitMap[char] ?? char)
+    .join('')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 export default function TableOfContents() {
@@ -18,11 +35,18 @@ export default function TableOfContents() {
 
     const elements = article.querySelectorAll('h1, h2, h3');
     const items: HeadingItem[] = [];
+    const usedIds = new Set<string>();
 
-    elements.forEach((el, index) => {
+    elements.forEach((el) => {
       if (!el.id) {
-        el.id = `heading-${index}`;
+        let slug = slugify(el.textContent || '');
+        if (!slug) slug = `heading-${items.length}`;
+        while (usedIds.has(slug)) {
+          slug = `${slug}-${items.length}`;
+        }
+        el.id = slug;
       }
+      usedIds.add(el.id);
       items.push({
         id: el.id,
         text: el.textContent || '',
@@ -54,6 +78,15 @@ export default function TableOfContents() {
     return () => observer.disconnect();
   }, [headings]);
 
+  const handleClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      history.replaceState(null, '', `#${id}`);
+    }
+  }, []);
+
   if (headings.length === 0) return null;
 
   return (
@@ -66,6 +99,7 @@ export default function TableOfContents() {
           <li key={heading.id}>
             <a
               href={`#${heading.id}`}
+              onClick={(e) => handleClick(e, heading.id)}
               className={`block py-1.5 text-[13px] leading-normal border-l-2 transition-all duration-150 ${
                 heading.level === 1
                   ? 'pl-3'
