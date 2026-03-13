@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Inter } from 'next/font/google';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -36,6 +37,26 @@ export default function RootLayout({
         <Header />
         <div className="min-h-screen">{children}</div>
         <Footer />
+        <Script
+          id="yandex-metrika"
+          strategy="afterInteractive"
+          src="https://mc.yandex.ru/metrika/tag.js?id=107578899"
+        />
+        <Script
+          id="yandex-metrika-init"
+          strategy="afterInteractive"
+        >
+          {`window.ym=window.ym||function(){(window.ym.a=window.ym.a||[]).push(arguments)};window.ym.l=1*new Date();ym(107578899,'init',{ssr:true,webvisor:true,clickmap:true,ecommerce:'dataLayer',accurateTrackBounce:true,trackLinks:true});`}
+        </Script>
+        <noscript>
+          <div>
+            <img
+              src="https://mc.yandex.ru/watch/107578899"
+              style={{ position: 'absolute', left: '-9999px' }}
+              alt=""
+            />
+          </div>
+        </noscript>
       </body>
     </html>
   );
