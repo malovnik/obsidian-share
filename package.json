@@ -15,7 +15,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:backfill": "npx tsx scripts/backfill.ts",
-    "db:setup-search": "npx tsx scripts/setup-search.ts"
+    "db:setup-search": "npx tsx scripts/setup-search.ts",
+    "db:add-unique-views": "npx tsx scripts/add-unique-views.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.36.4",

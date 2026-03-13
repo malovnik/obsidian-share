@@ -8,6 +8,7 @@ interface AdminNote {
   title: string;
   slug: string;
   viewCount: number;
+  uniqueViewCount: number;
   isDeleted: boolean;
   createdAt: string;
   sourceId: string | null;
@@ -218,8 +219,8 @@ export default function AdminPage() {
                   {note.title}
                 </a>
 
-                <span className="text-xs text-gray-300 shrink-0 tabular-nums">
-                  {note.viewCount || 0}
+                <span className="text-xs text-gray-300 shrink-0 tabular-nums" title="Уникальные / Все просмотры">
+                  {note.uniqueViewCount || 0}/{note.viewCount || 0}
                 </span>
 
                 <span className="text-xs text-gray-300 shrink-0 w-16 text-right">

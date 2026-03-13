@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         title: notes.title,
         slug: notes.slug,
         viewCount: notes.viewCount,
+        uniqueViewCount: notes.uniqueViewCount,
         isDeleted: notes.isDeleted,
         createdAt: notes.createdAt,
         sourceId: notes.sourceId,

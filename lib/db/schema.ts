@@ -41,8 +41,11 @@ export const notes = pgTable('notes', {
   // Срок жизни ссылки (дата удаления)
   expiresAt: timestamp('expires_at'),
 
-  // Количество просмотров
+  // Количество просмотров (все)
   viewCount: integer('view_count').default(0),
+
+  // Количество уникальных просмотров (по IP)
+  uniqueViewCount: integer('unique_view_count').default(0),
 
   // Метаданные
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -69,3 +72,10 @@ export const notes = pgTable('notes', {
 
 export type Note = typeof notes.$inferSelect;
 export type NewNote = typeof notes.$inferInsert;
+
+export const noteViews = pgTable('note_views', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  noteId: text('note_id').notNull().references(() => notes.id, { onDelete: 'cascade' }),
+  viewerIp: text('viewer_ip').notNull(),
+  viewedAt: timestamp('viewed_at').defaultNow().notNull(),
+});

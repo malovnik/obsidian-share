@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { notes } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { notes, noteViews } from '@/lib/db/schema';
+import { eq, and } from 'drizzle-orm';
 import { extractIdFromSlug, isValidSlug } from '@/lib/utils/slug';
 
 export async function GET(
@@ -62,9 +62,27 @@ export async function GET(
       );
     }
 
+    const viewerIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown';
+
+    const [existingView] = await db
+      .select()
+      .from(noteViews)
+      .where(and(eq(noteViews.noteId, note.id), eq(noteViews.viewerIp, viewerIp)))
+      .limit(1);
+
+    const newViewCount = (note.viewCount || 0) + 1;
+    let newUniqueViewCount = note.uniqueViewCount || 0;
+
+    if (!existingView) {
+      newUniqueViewCount += 1;
+      await db.insert(noteViews).values({ noteId: note.id, viewerIp });
+    }
+
     await db
       .update(notes)
-      .set({ viewCount: (note.viewCount || 0) + 1 })
+      .set({ viewCount: newViewCount, uniqueViewCount: newUniqueViewCount })
       .where(eq(notes.id, note.id));
 
     return NextResponse.json({
@@ -74,7 +92,8 @@ export async function GET(
       htmlContent: note.htmlContent,
       theme: note.theme,
       customCss: note.customCss,
-      viewCount: (note.viewCount || 0) + 1,
+      viewCount: newViewCount,
+      uniqueViewCount: newUniqueViewCount,
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
       tags: note.tags,

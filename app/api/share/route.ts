@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
       password,
       expiresInDays,
       sourceId,
+      shareId,
       noIndex = false
     } = body;
 
@@ -38,14 +39,25 @@ export async function POST(request: NextRequest) {
     }
 
     let existingNote = null;
-    if (sourceId) {
+
+    if (shareId) {
+      const results = await db
+        .select()
+        .from(notes)
+        .where(eq(notes.id, shareId))
+        .limit(1);
+
+      existingNote = results[0] || null;
+    }
+
+    if (!existingNote && sourceId) {
       const results = await db
         .select()
         .from(notes)
         .where(eq(notes.sourceId, sourceId))
         .limit(1);
 
-      existingNote = results[0];
+      existingNote = results[0] || null;
     }
 
     let note;
@@ -67,6 +79,7 @@ export async function POST(request: NextRequest) {
           password,
           expiresAt,
           noIndex,
+          sourceId: sourceId || existingNote.sourceId,
           tags: processed.tags,
           readingTime: processed.readingTime,
           updatedAt: new Date(),
