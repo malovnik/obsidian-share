@@ -96,13 +96,21 @@
 }
 
 .markdown-body pre {
-  @apply bg-gray-950 text-gray-100 p-4 sm:p-5 rounded-none overflow-x-auto mb-6 border-t-2 border-black;
+  @apply bg-gray-100 text-gray-900 p-4 sm:p-5 rounded-none overflow-x-auto mb-6 border-l-2 border-black relative;
   max-width: 100%;
 }
 
 .markdown-body pre code {
-  @apply bg-transparent p-0 text-sm;
+  @apply bg-transparent p-0 text-sm text-gray-900;
   white-space: pre;
+}
+
+.markdown-body pre .copy-btn {
+  @apply absolute top-2 right-2 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-black bg-white/80 border border-gray-200 transition-colors cursor-pointer;
+}
+
+.markdown-body pre .copy-btn.copied {
+  @apply text-green-600;
 }
 
 .markdown-body blockquote {

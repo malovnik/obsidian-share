@@ -13,6 +13,10 @@ function createSnippet(content: string): string {
   return stripped.substring(0, 200) + '...';
 }
 
+function sanitizeForTsquery(input: string): string {
+  return input.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, ' ').trim();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -33,26 +37,26 @@ export async function GET(request: NextRequest) {
 
     let rows: Array<Record<string, unknown>>;
 
-    if (q && tags.length > 0) {
+    if (q) {
+      const sanitized = sanitizeForTsquery(q);
+      const prefixTerms = sanitized.split(/\s+/).filter(Boolean).map(t => `${t}:*`).join(' & ');
+      const tagsFilter = tags.length > 0 ? sql`AND tags @> ${tags}::text[]` : sql``;
+
       const res = await db.execute(
         sql`SELECT id, title, content, tags, reading_time, created_at, view_count,
-            ts_rank(search_vector, (websearch_to_tsquery('russian', ${q}) || websearch_to_tsquery('english', ${q}))) as relevance
+            GREATEST(
+              ts_rank(search_vector, websearch_to_tsquery('russian', ${q}) || websearch_to_tsquery('english', ${q})),
+              ts_rank(search_vector, to_tsquery('russian', ${prefixTerms}) || to_tsquery('english', ${prefixTerms}))
+            ) as relevance
           FROM notes
           WHERE no_index = false AND is_deleted = false
-            AND search_vector @@ (websearch_to_tsquery('russian', ${q}) || websearch_to_tsquery('english', ${q}))
-            AND tags @> ${tags}::text[]
-          ORDER BY relevance DESC
-          LIMIT ${limit + 1} OFFSET ${offset}`
-      );
-      rows = res as unknown as Array<Record<string, unknown>>;
-    } else if (q) {
-      const res = await db.execute(
-        sql`SELECT id, title, content, tags, reading_time, created_at, view_count,
-            ts_rank(search_vector, (websearch_to_tsquery('russian', ${q}) || websearch_to_tsquery('english', ${q}))) as relevance
-          FROM notes
-          WHERE no_index = false AND is_deleted = false
-            AND search_vector @@ (websearch_to_tsquery('russian', ${q}) || websearch_to_tsquery('english', ${q}))
-          ORDER BY relevance DESC
+            AND (
+              search_vector @@ (websearch_to_tsquery('russian', ${q}) || websearch_to_tsquery('english', ${q}))
+              OR search_vector @@ (to_tsquery('russian', ${prefixTerms}) || to_tsquery('english', ${prefixTerms}))
+              OR title ILIKE ${'%' + q + '%'}
+            )
+            ${tagsFilter}
+          ORDER BY relevance DESC, created_at DESC
           LIMIT ${limit + 1} OFFSET ${offset}`
       );
       rows = res as unknown as Array<Record<string, unknown>>;

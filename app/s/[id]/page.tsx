@@ -8,6 +8,7 @@ import PrivateNotePage from '@/app/components/PrivateNotePage';
 import ProgressBar from '@/app/components/ProgressBar';
 import ArticleSidebar from '@/app/components/ArticleSidebar';
 import ReadingPosition from '@/app/components/ReadingPosition';
+import CodeCopyButtons from '@/app/components/CodeCopyButtons';
 
 interface Note {
   id: string;
@@ -137,6 +138,7 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
               className="markdown-body"
               dangerouslySetInnerHTML={{ __html: note.htmlContent }}
             />
+            <CodeCopyButtons />
 
             {relatedArticles.length > 0 && (
               <section className="mt-16 pt-8 border-t border-gray-200">
