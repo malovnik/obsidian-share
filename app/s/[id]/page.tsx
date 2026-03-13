@@ -9,6 +9,7 @@ import ProgressBar from '@/app/components/ProgressBar';
 import ArticleSidebar from '@/app/components/ArticleSidebar';
 import ReadingPosition from '@/app/components/ReadingPosition';
 import CodeCopyButtons from '@/app/components/CodeCopyButtons';
+import ArticleJsonLd from '@/app/components/ArticleJsonLd';
 
 interface Note {
   id: string;
@@ -18,7 +19,9 @@ interface Note {
   theme: string;
   viewCount: number;
   createdAt: string;
+  updatedAt: string;
   tags: string[] | null;
+  readingTime: number;
 }
 
 async function getNote(idOrSlug: string): Promise<Note | null> {
@@ -96,8 +99,47 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
     day: 'numeric',
   });
 
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://read.malovnik.ru';
+  const articleUrl = `${baseUrl}/s/${idOrSlug}`;
+  const cleanContent = stripMarkdown(stripFrontmatter(note.content));
+  const wordCount = cleanContent.split(/\s+/).filter(Boolean).length;
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Главная',
+        item: baseUrl,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: note.title,
+        item: articleUrl,
+      },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-white">
+      <ArticleJsonLd
+        title={note.title}
+        description={cleanContent.substring(0, 160)}
+        url={articleUrl}
+        datePublished={note.createdAt}
+        dateModified={note.updatedAt ?? note.createdAt}
+        authorName="Малов Никита"
+        tags={noteTags}
+        imageUrl={`${baseUrl}/og-image.png`}
+        wordCount={wordCount}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       <ProgressBar />
       <ReadingPosition articleId={note.id} />
 
@@ -218,6 +260,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     };
   }
 
+  const noteTags = note.tags ?? [];
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://read.malovnik.ru';
   const url = `${baseUrl}/s/${idOrSlug}`;
   const withoutFrontmatter = stripFrontmatter(note.content)
@@ -227,10 +270,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const cleanText = stripMarkdown(withoutFrontmatter);
   const description = cleanText.substring(0, 160);
   const authorName = 'Малов Никита';
-  const siteName = 'Obsidian Share - Заметки от Малова Никиты';
+  const siteName = 'Малов НикИИта 🍳 Жарю ИИшку';
 
   return {
-    title: `${note.title} | ${authorName}`,
+    title: note.title,
     description,
     authors: [{ name: authorName }],
     creator: authorName,
@@ -252,7 +295,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       siteName,
       locale: 'ru_RU',
       publishedTime: note.createdAt,
+      modifiedTime: note.updatedAt ?? note.createdAt,
       authors: [authorName],
+      tags: noteTags,
+      section: noteTags[0] ?? 'Заметки',
       images: [
         {
           url: `${baseUrl}/og-image.png`,
@@ -273,6 +319,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
     other: {
       'yandex-verification': process.env.YANDEX_VERIFICATION || '',
+      'article:author': authorName,
     },
 
     robots: {

@@ -1,8 +1,10 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Script from 'next/script';
 import { Inter } from 'next/font/google';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import YandexMetrikaHit from './components/YandexMetrikaHit';
 import './globals.css';
 
 const inter = Inter({
@@ -14,15 +16,24 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Малов Никита — Заметки',
-    template: '%s',
+    default: 'Малов НикИИта 🍳 Жарю ИИшку',
+    template: '%s | Малов Никита',
   },
   description: 'Заметки об AI, разработке, продуктивности и не только',
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://read.malovnik.ru'),
+  applicationName: 'Малов НикИИта 🍳 Жарю ИИшку',
   openGraph: {
     type: 'website',
     locale: 'ru_RU',
-    siteName: 'Малов Никита — Заметки',
+    siteName: 'Малов НикИИта 🍳 Жарю ИИшку',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Малов НикИИта 🍳 Жарю ИИшку',
+      },
+    ],
   },
 };
 
@@ -34,6 +45,27 @@ export default function RootLayout({
   return (
     <html lang="ru" className={inter.variable}>
       <body className="antialiased font-sans bg-white text-gray-900">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebSite',
+              name: 'Малов НикИИта 🍳 Жарю ИИшку',
+              url: process.env.NEXT_PUBLIC_BASE_URL || 'https://read.malovnik.ru',
+              description: 'Заметки об AI, разработке, продуктивности и не только',
+              author: {
+                '@type': 'Person',
+                name: 'Малов Никита',
+                url: 'https://read.malovnik.ru',
+              },
+              inLanguage: 'ru',
+            }),
+          }}
+        />
+        <Suspense fallback={null}>
+          <YandexMetrikaHit />
+        </Suspense>
         <Header />
         <div className="min-h-screen">{children}</div>
         <Footer />

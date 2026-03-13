@@ -76,6 +76,9 @@ export async function GET(
       customCss: note.customCss,
       viewCount: (note.viewCount || 0) + 1,
       createdAt: note.createdAt,
+      updatedAt: note.updatedAt,
+      tags: note.tags,
+      readingTime: note.readingTime,
     });
   } catch (error) {
     console.error('Get note error:', error);
