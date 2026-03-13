@@ -80,7 +80,6 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
     notFound();
   }
 
-  const customCss = (note as any).customCss || '';
   const noteTags = note.tags ?? [];
 
   let relatedArticles: { id: string; slug: string; title: string; tags: string[] }[] = [];
@@ -100,10 +99,6 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
     <div className="min-h-screen bg-white">
       <ProgressBar />
       <ReadingPosition articleId={note.id} />
-
-      {customCss && (
-        <style dangerouslySetInnerHTML={{ __html: customCss }} />
-      )}
 
       <div className="max-w-6xl mx-auto px-4 pt-8 pb-20">
         <div className="mb-8">

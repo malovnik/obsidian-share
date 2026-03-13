@@ -87,10 +87,6 @@ export default function PrivateNotePage({ noteId }: { noteId: string }) {
     <div className="min-h-screen bg-white">
       <ProgressBar />
 
-      {note.customCss && (
-        <style dangerouslySetInnerHTML={{ __html: note.customCss }} />
-      )}
-
       <div className="max-w-6xl mx-auto px-4 pt-8 pb-20">
         <div className="mb-8">
           <Link

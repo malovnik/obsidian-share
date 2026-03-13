@@ -7,10 +7,12 @@
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-white text-gray-900;
+    overflow-x: hidden;
   }
 
   ::selection {
@@ -33,6 +35,8 @@
   @apply text-gray-900 leading-relaxed text-base;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .markdown-body h1 {
@@ -40,11 +44,13 @@
 }
 
 .markdown-body h2 {
-  @apply text-xl sm:text-2xl font-semibold text-black mb-4 mt-8 tracking-tight;
+  @apply text-xl sm:text-2xl font-semibold mb-4 mt-8 tracking-tight;
+  color: #C0A062;
 }
 
 .markdown-body h3 {
-  @apply text-lg sm:text-xl font-medium text-black mb-3 mt-6;
+  @apply text-lg sm:text-xl font-medium mb-3 mt-6;
+  color: #C0A062;
 }
 
 .markdown-body h4 {
