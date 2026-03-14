@@ -7,6 +7,20 @@ const tsvector = customType<{ data: string }>({
   },
 });
 
+const byteaType = customType<{ data: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+  toDriver(value: Buffer): Buffer {
+    return value;
+  },
+  fromDriver(value: unknown): Buffer {
+    if (Buffer.isBuffer(value)) return value;
+    if (value instanceof Uint8Array) return Buffer.from(value);
+    return Buffer.from(value as string, 'hex');
+  },
+});
+
 /**
  * Таблица с опубликованными заметками
  */
@@ -68,10 +82,28 @@ export const notes = pgTable('notes', {
 
   // Полнотекстовый поиск (заполняется триггером)
   searchVector: tsvector('search_vector'),
+
+  // ID обложки (ссылка на таблицу images)
+  coverImageId: text('cover_image_id'),
 });
 
 export type Note = typeof notes.$inferSelect;
 export type NewNote = typeof notes.$inferInsert;
+
+export const images = pgTable('images', {
+  id: text('id').primaryKey(),
+  noteId: text('note_id').references(() => notes.id, { onDelete: 'cascade' }),
+  filename: text('filename').notNull(),
+  data: byteaType('data').notNull(),
+  mimeType: text('mime_type').notNull().default('image/webp'),
+  width: integer('width'),
+  height: integer('height'),
+  size: integer('size'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export type Image = typeof images.$inferSelect;
+export type NewImage = typeof images.$inferInsert;
 
 export const noteViews = pgTable('note_views', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),

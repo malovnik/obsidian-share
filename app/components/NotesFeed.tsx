@@ -19,6 +19,7 @@ interface Note {
   updatedAt: string;
   viewCount: number;
   isPrivate: boolean;
+  coverImageId: string | null;
 }
 
 interface NotesResponse {
@@ -245,6 +246,7 @@ export default function NotesFeed() {
               readingTime={note.readingTime}
               createdAt={note.createdAt}
               viewCount={note.viewCount}
+              coverImageId={note.coverImageId ?? null}
             />
           ))}
         </div>

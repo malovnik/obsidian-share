@@ -186,3 +186,20 @@
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
 }
+
+/* Link preview cards */
+.link-preview {
+  @apply block border border-gray-200 p-4 my-4 no-underline hover:border-gray-400 transition-colors;
+}
+
+.link-preview__domain {
+  @apply block text-xs text-gray-400 mb-1;
+}
+
+.link-preview__title {
+  @apply block text-sm font-medium text-black leading-snug;
+}
+
+.link-preview__url {
+  @apply block text-xs text-gray-400 mt-1 truncate;
+}

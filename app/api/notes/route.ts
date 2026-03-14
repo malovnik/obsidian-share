@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
         readingTime: notes.readingTime,
         createdAt: notes.createdAt,
         viewCount: notes.viewCount,
+        coverImageId: notes.coverImageId,
       })
       .from(notes)
       .where(and(...conditions))
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
       readingTime: note.readingTime ?? 0,
       createdAt: note.createdAt.toISOString(),
       viewCount: note.viewCount ?? 0,
+      coverImageId: note.coverImageId ?? null,
     }));
 
     const nextCursor = hasMore

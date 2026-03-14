@@ -9,6 +9,7 @@ import ProgressBar from '@/app/components/ProgressBar';
 import ArticleSidebar from '@/app/components/ArticleSidebar';
 import ReadingPosition from '@/app/components/ReadingPosition';
 import CodeCopyButtons from '@/app/components/CodeCopyButtons';
+import LinkPreviews from '@/app/components/LinkPreviews';
 import ArticleJsonLd from '@/app/components/ArticleJsonLd';
 
 interface Note {
@@ -181,6 +182,7 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
               dangerouslySetInnerHTML={{ __html: note.htmlContent }}
             />
             <CodeCopyButtons />
+            <LinkPreviews />
 
             {relatedArticles.length > 0 && (
               <section className="mt-16 pt-8 border-t border-gray-200">

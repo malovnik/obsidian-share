@@ -9,6 +9,7 @@ interface ArticleCardProps {
   readingTime: number;
   createdAt: string;
   viewCount: number;
+  coverImageId: string | null;
 }
 
 function cleanTitle(title: string): string {
@@ -20,13 +21,13 @@ function cleanTitle(title: string): string {
 }
 
 export default function ArticleCard({
-  id,
   slug,
   title,
   snippet,
   tags,
   readingTime,
   createdAt,
+  coverImageId,
 }: ArticleCardProps) {
   const formattedDate = new Date(createdAt).toLocaleDateString('ru-RU', {
     year: 'numeric',
@@ -42,16 +43,33 @@ export default function ArticleCard({
       href={`/s/${slug}`}
       className="group block hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
     >
-      <div className="relative bg-gray-50 border-2 border-black aspect-[16/9] flex items-center justify-center p-6 overflow-hidden">
-        <span className="absolute top-3 left-4 text-[72px] font-black text-black/[0.04] leading-none select-none">
-          {firstLetter}
-        </span>
-        <h3 className="text-black font-semibold text-base leading-snug line-clamp-3 text-center relative z-10">
-          {displayTitle}
-        </h3>
+      <div className="relative bg-gray-50 border-2 border-black aspect-[16/9] flex items-center justify-center overflow-hidden">
+        {coverImageId ? (
+          <img
+            src={`/api/images/${coverImageId}`}
+            alt={displayTitle}
+            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+            loading="lazy"
+          />
+        ) : (
+          <>
+            <span className="absolute top-3 left-4 text-[72px] font-black text-black/[0.04] leading-none select-none">
+              {firstLetter}
+            </span>
+            <h3 className="text-black font-semibold text-base leading-snug line-clamp-3 text-center relative z-10 p-6">
+              {displayTitle}
+            </h3>
+          </>
+        )}
       </div>
 
       <div className="border-2 border-t-0 border-black p-4">
+        {coverImageId && (
+          <h3 className="text-black font-semibold text-sm leading-snug line-clamp-2 mb-2">
+            {displayTitle}
+          </h3>
+        )}
+
         <p className="text-sm text-gray-600 line-clamp-2 mb-3 leading-relaxed">
           {snippet}
         </p>

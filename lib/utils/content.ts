@@ -8,6 +8,7 @@ export interface ProcessedContent {
   tags: string[];
   readingTime: number;
   snippet: string;
+  firstImageUrl: string | null;
 }
 
 const translitMap: Record<string, string> = {
@@ -74,11 +75,15 @@ export async function processArticleContent(rawContent: string): Promise<Process
   const wordCount = plainText.split(/\s+/).filter(Boolean).length;
   const readingTime = Math.max(1, Math.round(wordCount / 200));
 
+  const imageMatch = processedMarkdown.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+  const firstImageUrl = imageMatch ? imageMatch[2] : null;
+
   return {
     cleanContent,
     htmlContent,
     tags,
     readingTime,
     snippet,
+    firstImageUrl,
   };
 }

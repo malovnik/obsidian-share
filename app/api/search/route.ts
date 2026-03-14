@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       const tagsFilter = tags.length > 0 ? sql`AND tags @> ${tags}::text[]` : sql``;
 
       const res = await db.execute(
-        sql`SELECT id, title, content, tags, reading_time, created_at, view_count,
+        sql`SELECT id, title, content, tags, reading_time, created_at, view_count, cover_image_id,
             GREATEST(
               ts_rank(search_vector, websearch_to_tsquery('russian', ${q}) || websearch_to_tsquery('english', ${q})),
               ts_rank(search_vector, to_tsquery('russian', ${prefixTerms}) || to_tsquery('english', ${prefixTerms}))
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       rows = res as unknown as Array<Record<string, unknown>>;
     } else {
       const res = await db.execute(
-        sql`SELECT id, title, content, tags, reading_time, created_at, view_count, 0 as relevance
+        sql`SELECT id, title, content, tags, reading_time, created_at, view_count, cover_image_id, 0 as relevance
           FROM notes
           WHERE no_index = false AND is_deleted = false
             AND tags @> ${tags}::text[]
@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
           : String(row.created_at),
         viewCount: Number(row.view_count) || 0,
         relevance: Number(row.relevance) || 0,
+        coverImageId: row.cover_image_id ? String(row.cover_image_id) : null,
       };
     });
 

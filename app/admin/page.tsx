@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createFullSlug } from '@/lib/utils/slug';
 
 interface AdminNote {
@@ -14,6 +14,7 @@ interface AdminNote {
   sourceId: string | null;
   noIndex: boolean;
   readingTime: number;
+  coverImageId: string | null;
 }
 
 export default function AdminPage() {
@@ -25,6 +26,9 @@ export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
 
   const fetchNotes = useCallback(async (query = '') => {
     try {
@@ -97,6 +101,74 @@ export default function AdminPage() {
     }
   };
 
+  const handleRemoveCover = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/notes/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove-cover' }),
+      });
+
+      if (res.ok) {
+        setNotes((prev) =>
+          prev.map((n) => (n.id === id ? { ...n, coverImageId: null } : n))
+        );
+      }
+    } catch {
+      /* error */
+    }
+  };
+
+  const handleReplaceCover = (noteId: string) => {
+    setActiveNoteId(noteId);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeNoteId) return;
+
+    const noteId = activeNoteId;
+    setUploadingId(noteId);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+
+      const res = await fetch(`/api/admin/notes/${noteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set-cover',
+          imageData: base64,
+          filename: file.name,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setNotes((prev) =>
+          prev.map((n) =>
+            n.id === noteId ? { ...n, coverImageId: data.coverImageId } : n
+          )
+        );
+      }
+    } catch {
+      /* error */
+    } finally {
+      setUploadingId(null);
+      setActiveNoteId(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleLogout = async () => {
     await fetch('/api/admin/login', { method: 'DELETE' });
     setAuthed(false);
@@ -157,7 +229,15 @@ export default function AdminPage() {
   const activeNotes = notes.filter((n) => !n.isDeleted);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelected}
+        className="hidden"
+      />
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-lg font-semibold text-black tracking-tight">
@@ -201,6 +281,23 @@ export default function AdminPage() {
                 key={note.id}
                 className="flex items-center gap-3 py-2.5 border-b border-gray-100 group"
               >
+                {/* Cover thumbnail */}
+                <div className="shrink-0 w-12 h-8 bg-gray-100 border border-gray-200 overflow-hidden relative group/cover">
+                  {note.coverImageId ? (
+                    <img
+                      src={`/api/images/${note.coverImageId}`}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-[10px] text-gray-300 font-bold">
+                        {note.title.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 <a
                   href={`/s/${fullSlug}`}
                   target="_blank"
@@ -226,6 +323,39 @@ export default function AdminPage() {
                 <span className="text-xs text-gray-300 shrink-0 w-16 text-right">
                   {date}
                 </span>
+
+                {/* Cover actions */}
+                <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                  {note.coverImageId ? (
+                    <button
+                      onClick={() => handleRemoveCover(note.id)}
+                      className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-orange-500 transition-colors"
+                      title="Удалить обложку"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                      </svg>
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={() => handleReplaceCover(note.id)}
+                    disabled={uploadingId === note.id}
+                    className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-blue-500 transition-colors disabled:opacity-50"
+                    title={note.coverImageId ? 'Заменить обложку' : 'Загрузить обложку'}
+                  >
+                    {uploadingId === note.id ? (
+                      <div className="w-3 h-3 border border-gray-400 border-t-transparent animate-spin rounded-full" />
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
 
                 <button
                   onClick={() => handleDelete(note.id, note.title)}

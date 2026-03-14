@@ -7,6 +7,7 @@ export interface NoteCard {
   readingTime: number;
   createdAt: string;
   viewCount: number;
+  coverImageId: string | null;
 }
 
 export interface SearchResult extends NoteCard {

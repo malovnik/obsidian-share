@@ -32,6 +32,14 @@ export async function POST(request: NextRequest) {
 
     const processed = await processArticleContent(content);
 
+    let coverImageId: string | null = null;
+    if (processed.firstImageUrl) {
+      const imageIdMatch = processed.firstImageUrl.match(/\/api\/images\/([a-zA-Z0-9]+)$/);
+      if (imageIdMatch) {
+        coverImageId = imageIdMatch[1];
+      }
+    }
+
     let expiresAt = null;
     if (expiresInDays && expiresInDays > 0) {
       expiresAt = new Date();
@@ -82,6 +90,7 @@ export async function POST(request: NextRequest) {
           sourceId: sourceId || existingNote.sourceId,
           tags: processed.tags,
           readingTime: processed.readingTime,
+          coverImageId: coverImageId || existingNote.coverImageId,
           updatedAt: new Date(),
         })
         .where(eq(notes.id, existingNote.id))
@@ -108,6 +117,7 @@ export async function POST(request: NextRequest) {
           noIndex,
           tags: processed.tags,
           readingTime: processed.readingTime,
+          coverImageId,
         })
         .returning();
 

@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         sourceId: notes.sourceId,
         noIndex: notes.noIndex,
         readingTime: notes.readingTime,
+        coverImageId: notes.coverImageId,
       })
       .from(notes)
       .where(conditions)
