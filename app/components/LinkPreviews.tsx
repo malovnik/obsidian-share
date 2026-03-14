@@ -10,6 +10,13 @@ function getDomain(url: string): string {
   }
 }
 
+function isRawUrl(link: HTMLAnchorElement): boolean {
+  const href = link.getAttribute('href') || '';
+  const text = link.textContent?.trim() || '';
+  if (!href.startsWith('http')) return false;
+  return text === href || text === decodeURIComponent(href);
+}
+
 function createPreviewCard(href: string, domain: string): HTMLAnchorElement {
   const card = document.createElement('a');
   card.href = href;
@@ -27,7 +34,7 @@ function createPreviewCard(href: string, domain: string): HTMLAnchorElement {
 
   const urlEl = document.createElement('span');
   urlEl.className = 'link-preview__url';
-  urlEl.textContent = href;
+  urlEl.textContent = href.length > 60 ? href.substring(0, 60) + '...' : href;
 
   card.appendChild(domainEl);
   card.appendChild(titleEl);
@@ -36,46 +43,57 @@ function createPreviewCard(href: string, domain: string): HTMLAnchorElement {
   return card;
 }
 
+function fetchTitle(href: string): Promise<string | null> {
+  return fetch(`/api/link-preview?url=${encodeURIComponent(href)}`)
+    .then((res) => res.json())
+    .then((data) => data.title || null)
+    .catch(() => null);
+}
+
 export default function LinkPreviews() {
   useEffect(() => {
     const article = document.querySelector('.markdown-body');
     if (!article) return;
 
-    const paragraphs = article.querySelectorAll('p');
+    const allLinks = article.querySelectorAll('a');
 
-    paragraphs.forEach((p) => {
-      const links = p.querySelectorAll('a');
-      if (links.length !== 1) return;
+    allLinks.forEach((link) => {
+      if (!isRawUrl(link)) return;
+      if (link.closest('.link-preview')) return;
+      if (link.dataset.previewProcessed) return;
+      link.dataset.previewProcessed = '1';
 
-      const link = links[0];
-      const href = link.getAttribute('href');
-      if (!href || !href.startsWith('http')) return;
+      const href = link.getAttribute('href')!;
+      const paragraph = link.closest('p');
+      if (!paragraph) return;
 
-      if (p.textContent?.trim() !== link.textContent?.trim()) return;
+      const isBareLink = paragraph.textContent?.trim() === link.textContent?.trim();
 
-      if (p.querySelector('.link-preview')) return;
+      if (isBareLink) {
+        const domain = getDomain(href);
+        const card = createPreviewCard(href, domain);
+        paragraph.replaceChildren(card);
 
-      const domain = getDomain(href);
-      const card = createPreviewCard(href, domain);
-
-      p.replaceChildren(card);
-
-      fetch(`/api/link-preview?url=${encodeURIComponent(href)}`)
-        .then((res) => res.json())
-        .then((data) => {
-          const titleEl = card.querySelector('.link-preview__title');
-          if (titleEl && data.title) {
-            titleEl.textContent = data.title;
-          } else if (titleEl) {
-            titleEl.textContent = href;
-          }
-        })
-        .catch(() => {
+        fetchTitle(href).then((title) => {
           const titleEl = card.querySelector('.link-preview__title');
           if (titleEl) {
-            titleEl.textContent = href;
+            titleEl.textContent = title || href;
           }
         });
+      } else {
+        link.classList.add('link-preview-inline');
+        link.textContent = 'Загрузка...';
+
+        fetchTitle(href).then((title) => {
+          if (title) {
+            link.textContent = title;
+            link.title = href;
+          } else {
+            link.textContent = getDomain(href);
+            link.title = href;
+          }
+        });
+      }
     });
   }, []);
 
