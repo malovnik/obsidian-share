@@ -1,5 +1,8 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { eq, or, and } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { notes, noteViews } from '@/lib/db/schema';
 import { extractIdFromSlug, isValidSlug, createFullSlug } from '@/lib/utils/slug';
 import { stripFrontmatter } from '@/app/lib/frontmatter';
 import { stripMarkdown } from '@/lib/utils/markdown';
@@ -27,35 +30,117 @@ interface Note {
 
 async function getNote(idOrSlug: string): Promise<Note | null> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    // API route will handle both slug and ID formats
-    const res = await fetch(`${baseUrl}/api/share/${idOrSlug}`, {
-      cache: 'no-store',
-    });
+    const extractedId = isValidSlug(idOrSlug) ? extractIdFromSlug(idOrSlug) : idOrSlug;
 
-    if (!res.ok) {
+    let [note] = await db
+      .select()
+      .from(notes)
+      .where(eq(notes.id, extractedId))
+      .limit(1);
+
+    if (!note) {
+      [note] = await db
+        .select()
+        .from(notes)
+        .where(eq(notes.slug, idOrSlug.replace(/-[^-]*$/, '')))
+        .limit(1);
+    }
+
+    if (!note) {
+      [note] = await db
+        .select()
+        .from(notes)
+        .where(eq(notes.id, idOrSlug))
+        .limit(1);
+    }
+
+    if (!note || note.isDeleted) {
       return null;
     }
 
-    return res.json();
+    if (note.expiresAt && new Date() > note.expiresAt) {
+      await db
+        .update(notes)
+        .set({ isDeleted: true })
+        .where(eq(notes.id, note.id));
+      return null;
+    }
+
+    if (note.password) {
+      return null;
+    }
+
+    const viewerIp = 'ssr-prerender';
+
+    const [existingView] = await db
+      .select()
+      .from(noteViews)
+      .where(and(eq(noteViews.noteId, note.id), eq(noteViews.viewerIp, viewerIp)))
+      .limit(1);
+
+    const newViewCount = (note.viewCount || 0) + 1;
+    let newUniqueViewCount = note.uniqueViewCount || 0;
+
+    if (!existingView) {
+      newUniqueViewCount += 1;
+      await db.insert(noteViews).values({ noteId: note.id, viewerIp });
+    }
+
+    await db
+      .update(notes)
+      .set({ viewCount: newViewCount, uniqueViewCount: newUniqueViewCount })
+      .where(eq(notes.id, note.id));
+
+    return {
+      id: note.id,
+      title: note.title,
+      content: note.content,
+      htmlContent: note.htmlContent ?? '',
+      theme: note.theme ?? 'default',
+      viewCount: newViewCount,
+      createdAt: note.createdAt?.toISOString() ?? new Date().toISOString(),
+      updatedAt: note.updatedAt?.toISOString() ?? null,
+      tags: note.tags,
+      readingTime: note.readingTime ?? 0,
+    };
   } catch (error) {
     console.error('Failed to fetch note:', error);
     return null;
   }
 }
 
-async function getNoteMeta(idOrSlug: string): Promise<{ noIndex: boolean } | null> {
+async function getNoteMeta(idOrSlug: string): Promise<{ id: string; noIndex: boolean } | null> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const res = await fetch(`${baseUrl}/api/share/${idOrSlug}/meta`, {
-      cache: 'no-store',
-    });
+    const noteId = extractIdFromSlug(idOrSlug);
+    const slugWithoutId = idOrSlug.replace(/-[^-]*$/, '');
 
-    if (!res.ok) {
+    const results = await db
+      .select({
+        id: notes.id,
+        noIndex: notes.noIndex,
+        isDeleted: notes.isDeleted,
+      })
+      .from(notes)
+      .where(
+        or(
+          eq(notes.id, noteId),
+          eq(notes.id, idOrSlug),
+          eq(notes.slug, idOrSlug),
+          eq(notes.slug, slugWithoutId)
+        )
+      )
+      .limit(1);
+
+    const note = results[0];
+
+    if (!note || note.isDeleted) {
       return null;
     }
 
-    return res.json();
+    return {
+      id: note.id,
+      noIndex: note.noIndex ?? false,
+    };
   } catch (error) {
     console.error('Failed to fetch note meta:', error);
     return null;
