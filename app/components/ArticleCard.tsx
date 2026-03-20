@@ -43,7 +43,7 @@ export default function ArticleCard({
       href={`/s/${slug}`}
       className="group block hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
     >
-      <div className="relative bg-gray-50 border-2 border-black aspect-[16/9] flex items-center justify-center overflow-hidden">
+      <div className="relative bg-gray-50 border-2 border-black aspect-[3/2] flex items-center justify-center overflow-hidden">
         {coverImageId ? (
           <img
             src={`/api/images/${coverImageId}`}
