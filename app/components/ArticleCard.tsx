@@ -41,9 +41,9 @@ export default function ArticleCard({
   return (
     <Link
       href={`/s/${slug}`}
-      className="group block hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+      className="group flex flex-col h-full hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
     >
-      <div className="relative bg-gray-50 border-2 border-black aspect-[3/2] flex items-center justify-center overflow-hidden">
+      <div className="relative bg-gray-50 border-2 border-black aspect-[3/2] flex items-center justify-center overflow-hidden shrink-0">
         {coverImageId ? (
           <img
             src={`/api/images/${coverImageId}`}
@@ -63,33 +63,35 @@ export default function ArticleCard({
         )}
       </div>
 
-      <div className="border-2 border-t-0 border-black p-4">
+      <div className="border-2 border-t-0 border-black p-4 flex-1 flex flex-col">
         {coverImageId && (
-          <h3 className="text-black font-semibold text-sm leading-snug line-clamp-2 mb-2">
+          <h3 className="text-black font-semibold text-sm leading-snug line-clamp-3 mb-2">
             {displayTitle}
           </h3>
         )}
 
-        <p className="text-sm text-gray-600 line-clamp-2 mb-3 leading-relaxed">
+        <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed flex-1">
           {snippet}
         </p>
 
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {tags.slice(0, 4).map((tag) => (
-              <span
-                key={tag}
-                className="bg-gray-100 text-gray-700 rounded-sm px-2 py-0.5 text-xs"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="mt-auto pt-3">
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {tags.slice(0, 4).map((tag) => (
+                <span
+                  key={tag}
+                  className="bg-gray-100 text-gray-700 rounded-sm px-2 py-0.5 text-xs"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
 
-        <div className="flex items-center gap-3 text-xs text-gray-400">
-          <span>{formattedDate}</span>
-          {readingTime > 0 && <span>{readingTime} мин</span>}
+          <div className="flex items-center gap-3 text-xs text-gray-400">
+            <span>{formattedDate}</span>
+            {readingTime > 0 && <span>{readingTime} мин</span>}
+          </div>
         </div>
       </div>
     </Link>
