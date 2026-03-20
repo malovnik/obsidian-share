@@ -30,6 +30,7 @@ function slugify(text: string): string {
 
 function convertObsidianLinks(markdown: string): string {
   return markdown
+    .replace(/!\[\[([^\]]+)\]\]/g, '')
     .replace(/\[\[#([^\]]+)\]\]/g, (_match, heading: string) => {
       const slug = slugify(heading);
       return `[${heading}](#${slug})`;
