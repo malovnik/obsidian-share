@@ -14,6 +14,9 @@ export function stripMarkdown(text: string): string {
   // Remove inline code (`...`)
   result = result.replace(/`([^`]*)`/g, '$1');
 
+  // Remove Obsidian image/file embeds ![[filename]]
+  result = result.replace(/!\[\[([^\]]+)\]\]/g, '');
+
   // Remove images ![alt](url) → alt text
   result = result.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
 
