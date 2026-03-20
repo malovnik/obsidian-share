@@ -48,7 +48,7 @@ export default function ArticleCard({
           <img
             src={`/api/images/${coverImageId}`}
             alt={displayTitle}
-            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+            className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-[1.02] transition-all duration-700 ease-out"
             loading="lazy"
           />
         ) : (
