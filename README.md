@@ -1,6 +1,11 @@
 # Obsidian Share
 
-Self-hosted note sharing service for Obsidian
+Self-hosted note sharing service for Obsidian.
+
+Репозиторий состоит из двух частей:
+
+- **Веб-сервис** (этот корень) — Next.js бэкенд, куда публикуются заметки.
+- **Плагин для Obsidian** — `./obsidian-plugin/`. Инструкция по ручной установке и настройке: [`obsidian-plugin/README.md`](obsidian-plugin/README.md).
 
 ## Стек
 
