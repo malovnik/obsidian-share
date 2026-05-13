@@ -27,6 +27,7 @@ Railway DB service: `17869819-b033-4f97-b3f5-f485ec5cb6a0`
 - 2026-05-13: Gate 1 baseline выполнен. Артефакт: `docs/cost-optimization/logs/baseline-2026-05-13.md`.
 - Ключевой вывод Gate 1: 24h average app memory около `1.0 GB`, latest app memory после fresh deploy около `0.15 GB`; Postgres latest около `0.23 GB`; база `1115 MB`, из них `images` около `1095 MB`.
 - 2026-05-13: Gate 2 GitHub operational cleanup выполнен частично: repo description обновлен, создан issue `#1 Reduce Railway cost for Obsidian Share` (`https://github.com/malovnik/obsidian-share/issues/1`). Локальные `.claude`-следы и fully merged ветки оставлены нетронутыми, чтобы не смешивать cleanup с cost-работой.
+- 2026-05-13: Gate 3.1 выполнен: production `start` больше не запускает `db:push`; добавлен явный `db:deploy`; README обновлен под controlled migration flow.
 
 ## Внешние допущения по Railway
 
@@ -139,9 +140,9 @@ Railway pricing нужно проверять перед финансовыми 
 ## Этап 3. Убрать очевидную лишнюю работу без изменения архитектуры
 
 ### 3.1. Разделить start и migrations
-- Убрать `db:push` из обычного production `start`.
-- Добавить явный migration command для controlled deploy.
-- Проверить локальный build и Railway deploy.
+- [x] Убрать `db:push` из обычного production `start`.
+- [x] Добавить явный migration command для controlled deploy.
+- [x] Проверить локальный build и Railway deploy.
 
 ### 3.2. Ограничить DB connections
 - Посмотреть текущий `postgres()` client config.

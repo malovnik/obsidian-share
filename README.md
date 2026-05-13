@@ -9,7 +9,7 @@ Self-hosted note sharing service for Obsidian.
 
 ## Стек
 
-- Next.js 15 + React 19 + TypeScript
+- Next.js 16 + React 19 + TypeScript
 - PostgreSQL + Drizzle ORM
 - Tailwind CSS
 - marked, nanoid
@@ -21,6 +21,18 @@ npm install
 cp .env.example .env
 npm run dev
 ```
+
+## Миграции БД
+
+Production start не применяет миграции автоматически. Это сделано специально: рестарт приложения не должен менять схему боевой базы.
+
+```bash
+npm run db:generate  # создать migration files после изменения lib/db/schema.ts
+npm run db:deploy    # применить migration files к production/staging базе
+npm run db:push      # только для локальной/dev-синхронизации схемы
+```
+
+Перед production-миграциями сначала сделай бэкап базы и проверь rollback-план.
 
 ## Railway Deployment
 
@@ -54,8 +66,9 @@ NEXT_PUBLIC_BASE_URL=https://ваш-домен.up.railway.app
 
 ### Шаг 5: Деплой
 1. Railway автоматически задеплоит приложение
-2. Миграции базы данных применятся автоматически при старте (`npm run db:push`)
-3. После успешного деплоя получишь URL вида `https://your-app.up.railway.app`
+2. Если менялась схема БД, сначала применяй миграции отдельной командой `npm run db:deploy`
+3. При обычном рестарте Railway запускает только `npm start`, без изменения схемы БД
+4. После успешного деплоя получишь URL вида `https://your-app.up.railway.app`
 
 ### Проверка работоспособности
 1. Открой URL приложения
