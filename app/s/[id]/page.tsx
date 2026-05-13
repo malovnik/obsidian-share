@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { eq, or, and } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { notes, noteViews } from '@/lib/db/schema';
+import { notes } from '@/lib/db/schema';
 import { extractIdFromSlug, isValidSlug, createFullSlug } from '@/lib/utils/slug';
 import { stripFrontmatter } from '@/app/lib/frontmatter';
 import { stripMarkdown } from '@/lib/utils/markdown';
@@ -70,34 +70,13 @@ async function getNote(idOrSlug: string): Promise<Note | null> {
       return null;
     }
 
-    const viewerIp = 'ssr-prerender';
-
-    const [existingView] = await db
-      .select()
-      .from(noteViews)
-      .where(and(eq(noteViews.noteId, note.id), eq(noteViews.viewerIp, viewerIp)))
-      .limit(1);
-
-    const newViewCount = (note.viewCount || 0) + 1;
-    let newUniqueViewCount = note.uniqueViewCount || 0;
-
-    if (!existingView) {
-      newUniqueViewCount += 1;
-      await db.insert(noteViews).values({ noteId: note.id, viewerIp });
-    }
-
-    await db
-      .update(notes)
-      .set({ viewCount: newViewCount, uniqueViewCount: newUniqueViewCount })
-      .where(eq(notes.id, note.id));
-
     return {
       id: note.id,
       title: note.title,
       content: note.content,
       htmlContent: note.htmlContent ?? '',
       theme: note.theme ?? 'default',
-      viewCount: newViewCount,
+      viewCount: note.viewCount ?? 0,
       createdAt: note.createdAt?.toISOString() ?? new Date().toISOString(),
       updatedAt: note.updatedAt?.toISOString() ?? null,
       tags: note.tags,

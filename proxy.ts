@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Normalize double slashes in pathname (//api/share -> /api/share)
   const pathname = request.nextUrl.pathname;
   if (pathname.startsWith('//')) {

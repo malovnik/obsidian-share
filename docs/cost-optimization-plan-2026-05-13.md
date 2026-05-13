@@ -29,6 +29,7 @@ Railway DB service: `17869819-b033-4f97-b3f5-f485ec5cb6a0`
 - 2026-05-13: Gate 2 GitHub operational cleanup выполнен частично: repo description обновлен, создан issue `#1 Reduce Railway cost for Obsidian Share` (`https://github.com/malovnik/obsidian-share/issues/1`). Локальные `.claude`-следы и fully merged ветки оставлены нетронутыми, чтобы не смешивать cleanup с cost-работой.
 - 2026-05-13: Gate 3.1 выполнен: production `start` больше не запускает `db:push`; добавлен явный `db:deploy`; README обновлен под controlled migration flow.
 - 2026-05-13: Gate 3.2 выполнен: runtime PostgreSQL client ограничен маленьким pool (`max: 3`), коротким idle timeout и быстрым connect timeout.
+- 2026-05-13: Gate 3.3/3.5 выполнены для low-risk runtime cleanup: SSR public article route больше не пишет view counter на каждый просмотр; Next.js `middleware` convention заменен на `proxy`.
 
 ## Внешние допущения по Railway
 
@@ -151,9 +152,10 @@ Railway pricing нужно проверять перед финансовыми 
 - [x] Проверить, что API не деградирует.
 
 ### 3.3. Оптимизировать view counters
-- Найти все synchronous writes on read.
-- Перевести счетчики в более дешевую модель: батч, debounce или отдельная lightweight update policy.
-- Сохранить semantic: публичные просмотры считаются достаточно точно.
+- [x] Найти все synchronous writes on read.
+- [x] Убрать SSR write при обычном открытии публичной статьи.
+- [ ] Спроектировать более дешевую модель подсчета просмотров: батч, debounce или отдельная lightweight update policy.
+- [ ] Сохранить semantic: публичные просмотры считаются достаточно точно.
 
 ### 3.4. Уменьшить search trigger noise
 - Найти источник длинных токенов в content.
@@ -161,9 +163,9 @@ Railway pricing нужно проверять перед финансовыми 
 - Проверить поиск по русскому и английскому.
 
 ### 3.5. Убрать ненужные runtime warnings
-- Проверить deprecated `middleware` -> `proxy` для Next.js 16.
-- Обновить docs/комментарии, если меняется convention.
-- Не делать library upgrade в этом же шаге.
+- [x] Проверить deprecated `middleware` -> `proxy` для Next.js 16.
+- [x] Переименовать runtime hook без изменения CORS/redirect логики.
+- [x] Не делать library upgrade в этом же шаге.
 
 **Gate 3:** меньше runtime/DB шума, start дешевле, поведение API сохранено.
 
