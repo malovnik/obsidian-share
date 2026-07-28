@@ -354,8 +354,9 @@ final class Publisher
             }
         }
         foreach ($declaredHashes as $hash) {
-            if ($this->media->findByHash($hash) !== null) {
-                $hashes[] = $hash;
+            $media = $this->media->findByAlias($hash);
+            if ($media !== null) {
+                $hashes[] = (string) $media['hash'];
             }
         }
         return array_values(array_unique($hashes));

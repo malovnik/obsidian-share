@@ -152,11 +152,22 @@ final class AdminController
             $uniqueViews = max(0, (int) ($note['unique_view_count'] ?? 0));
             $views = max(0, (int) ($note['view_count'] ?? 0));
             $trashAction = $deleted
-                ? '<button name="action" value="restore">Вернуть</button>'
-                : '<button class="danger-ghost" name="action" value="trash">В корзину</button>';
+                ? '<button class="admin-icon-action restore" name="action" value="restore" title="Вернуть статью" aria-label="Вернуть статью «' . $title . '»"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/></svg></button>'
+                : '<button class="admin-icon-action trash" name="action" value="trash" title="Переместить в корзину" aria-label="Переместить статью «' . $title . '» в корзину"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg></button>';
             $purge = $deleted
                 ? '<details><summary>Удалить навсегда</summary><input name="confirmation" placeholder="DELETE"><button class="danger" name="action" value="purge">Удалить</button></details>'
                 : '';
+            $coverActionLabel = $coverHash === '' ? 'Загрузить обложку' : 'Заменить обложку';
+            $removeCoverForm = $coverHash === ''
+                ? ''
+                : <<<HTML
+    <form class="admin-icon-form" method="post" action="/admin/notes/{$id}/action">
+      <input type="hidden" name="csrf" value="{$csrf}">
+      <button class="admin-icon-action cover-remove" name="action" value="cover-remove" title="Удалить обложку" aria-label="Удалить обложку «{$title}»">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>
+      </button>
+    </form>
+HTML;
             $options = '';
             foreach (['public' => 'Публичная', 'unlisted' => 'По ссылке', 'private' => 'Закрытая'] as $value => $label) {
                 $selected = $mode === $value ? ' selected' : '';
@@ -174,18 +185,24 @@ final class AdminController
     </span>
   </div>
   <div class="admin-actions">
-    <form method="post" action="/admin/notes/{$id}/action">
+    <form class="admin-access-form" method="post" action="/admin/notes/{$id}/action">
       <input type="hidden" name="csrf" value="{$csrf}">
       <select name="access_mode">{$options}</select>
-      <button name="action" value="access">Сохранить доступ</button>
+      <button class="admin-icon-action access-save" name="action" value="access" title="Сохранить доступ" aria-label="Сохранить доступ к статье «{$title}»">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+      </button>
     </form>
-    <form method="post" action="/admin/notes/{$id}/action" enctype="multipart/form-data">
+    <form class="admin-cover-form admin-icon-form" method="post" action="/admin/notes/{$id}/action" enctype="multipart/form-data" data-cover-form>
       <input type="hidden" name="csrf" value="{$csrf}">
-      <input type="file" name="cover" accept="image/jpeg,image/png,image/gif,image/webp">
-      <button name="action" value="cover-upload">Заменить обложку</button>
-      <button class="danger-ghost" name="action" value="cover-remove">Убрать</button>
+      <input type="hidden" name="action" value="cover-upload">
+      <input class="admin-cover-input" type="file" name="cover" accept="image/jpeg,image/png,image/gif,image/webp" data-cover-input>
+      <button type="button" class="admin-icon-action cover-upload" data-cover-trigger title="{$coverActionLabel}" aria-label="{$coverActionLabel} «{$title}»">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+      </button>
+      <span class="admin-cover-status" data-cover-status aria-live="polite"></span>
     </form>
-    <form method="post" action="/admin/notes/{$id}/action">
+    {$removeCoverForm}
+    <form class="admin-trash-form admin-icon-form" method="post" action="/admin/notes/{$id}/action">
       <input type="hidden" name="csrf" value="{$csrf}">
       {$trashAction}
       {$purge}
@@ -228,6 +245,7 @@ HTML;
   <p class="result-count">Найдено: {$this->count($notes)}</p>
   <section class="admin-list">{$rows}</section>
 </main>
+<script src="/assets/admin.js" defer></script>
 HTML;
 
         return $this->template->layout(
@@ -315,7 +333,7 @@ HTML;
     {
         $upload = $_FILES['cover'] ?? null;
         if (!is_array($upload) || (int) ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            throw new HttpException(400, 'Choose a valid cover image');
+            throw new HttpException(400, 'Выберите корректное изображение для обложки');
         }
         $temporary = (string) ($upload['tmp_name'] ?? '');
         if (!is_uploaded_file($temporary)) {
@@ -325,8 +343,9 @@ HTML;
         if ($bytes === false) {
             throw new HttpException(400, 'Unable to read cover image');
         }
-        $hash = hash('sha256', $bytes);
-        $record = $this->media->store($bytes, $hash, (string) ($upload['name'] ?? 'cover'));
+        $sourceHash = hash('sha256', $bytes);
+        $record = $this->media->store($bytes, $sourceHash, (string) ($upload['name'] ?? 'cover'));
+        $hash = (string) $record['hash'];
         $this->pdo->prepare("DELETE FROM note_media WHERE note_id = :id AND role = 'cover'")
             ->execute(['id' => $id]);
         $statement = $this->pdo->prepare('UPDATE notes SET cover_media_hash = :hash, updated_at = :now WHERE id = :id');

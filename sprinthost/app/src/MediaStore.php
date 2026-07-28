@@ -9,6 +9,9 @@ use RuntimeException;
 
 final class MediaStore
 {
+    private const MAX_WEBP_WIDTH = 1920;
+    private const WEBP_QUALITY = 82;
+
     private const MIME_EXTENSIONS = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
@@ -44,21 +47,21 @@ final class MediaStore
             throw new HttpException(422, 'Image hash does not match request');
         }
 
-        $existing = $this->findByHash($actualHash);
+        $existing = $this->findByAlias($actualHash) ?? $this->findByHash($actualHash);
         if ($existing !== null) {
-            $path = $this->privatePath($actualHash, (string) $existing['extension']);
-            if (!is_file($path)) {
-                $this->atomicWrite($path, $bytes);
+            $existingHash = (string) $existing['hash'];
+            $path = $this->privatePath($existingHash, (string) $existing['extension']);
+            if (is_file($path)) {
+                return [
+                    'hash' => $existingHash,
+                    'mimeType' => (string) $existing['mime_type'],
+                    'extension' => (string) $existing['extension'],
+                    'size' => (int) $existing['size'],
+                    'width' => (int) $existing['width'],
+                    'height' => (int) $existing['height'],
+                    'deduplicated' => true,
+                ];
             }
-            return [
-                'hash' => $actualHash,
-                'mimeType' => (string) $existing['mime_type'],
-                'extension' => (string) $existing['extension'],
-                'size' => (int) $existing['size'],
-                'width' => (int) $existing['width'],
-                'height' => (int) $existing['height'],
-                'deduplicated' => true,
-            ];
         }
 
         $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes);
@@ -76,9 +79,32 @@ final class MediaStore
             throw new HttpException(422, 'Image dimensions exceed the safety limit');
         }
 
-        $extension = self::MIME_EXTENSIONS[$mime];
+        $normalized = $this->normalizeWebp($bytes, $width, $height);
+        $canonicalBytes = $normalized['bytes'];
+        $canonicalHash = hash('sha256', $canonicalBytes);
+        $extension = 'webp';
+        $mime = 'image/webp';
         $safeFilename = $this->safeFilename($filename, $extension);
-        $this->atomicWrite($this->privatePath($actualHash, $extension), $bytes);
+        $existing = $this->findByHash($canonicalHash);
+        if ($existing !== null) {
+            $path = $this->privatePath($canonicalHash, (string) $existing['extension']);
+            if (!is_file($path)) {
+                $this->atomicWrite($path, $canonicalBytes);
+            }
+            $this->addAlias($actualHash, $canonicalHash);
+            $this->addAlias($canonicalHash, $canonicalHash);
+            return [
+                'hash' => $canonicalHash,
+                'mimeType' => (string) $existing['mime_type'],
+                'extension' => (string) $existing['extension'],
+                'size' => (int) $existing['size'],
+                'width' => (int) $existing['width'],
+                'height' => (int) $existing['height'],
+                'deduplicated' => true,
+            ];
+        }
+
+        $this->atomicWrite($this->privatePath($canonicalHash, $extension), $canonicalBytes);
 
         $statement = $this->pdo->prepare(
             'INSERT OR IGNORE INTO media
@@ -86,24 +112,25 @@ final class MediaStore
              VALUES (:hash, :extension, :mime, :filename, :size, :width, :height, :created_at)'
         );
         $statement->execute([
-            'hash' => $actualHash,
+            'hash' => $canonicalHash,
             'extension' => $extension,
             'mime' => $mime,
             'filename' => $safeFilename,
-            'size' => strlen($bytes),
-            'width' => $width,
-            'height' => $height,
+            'size' => strlen($canonicalBytes),
+            'width' => $normalized['width'],
+            'height' => $normalized['height'],
             'created_at' => Clock::now(),
         ]);
-        $this->addAlias($actualHash, $actualHash);
+        $this->addAlias($actualHash, $canonicalHash);
+        $this->addAlias($canonicalHash, $canonicalHash);
 
         return [
-            'hash' => $actualHash,
+            'hash' => $canonicalHash,
             'mimeType' => $mime,
             'extension' => $extension,
-            'size' => strlen($bytes),
-            'width' => $width,
-            'height' => $height,
+            'size' => strlen($canonicalBytes),
+            'width' => $normalized['width'],
+            'height' => $normalized['height'],
             'deduplicated' => false,
         ];
     }
@@ -205,6 +232,127 @@ final class MediaStore
         }
     }
 
+    /** @return array{converted:int,bytesBefore:int,bytesAfter:int} */
+    public function normalizeLegacy(int $limit = 100): array
+    {
+        $limit = max(1, min(1000, $limit));
+        $records = $this->pdo->query(
+            "SELECT * FROM media
+             WHERE mime_type != 'image/webp' OR extension != 'webp'
+             ORDER BY created_at ASC
+             LIMIT {$limit}"
+        )->fetchAll();
+        $converted = 0;
+        $bytesBefore = 0;
+        $bytesAfter = 0;
+
+        foreach ($records as $record) {
+            $legacyHash = (string) $record['hash'];
+            $legacyExtension = (string) $record['extension'];
+            $legacyPath = $this->privatePath($legacyHash, $legacyExtension);
+            $source = is_file($legacyPath) ? file_get_contents($legacyPath) : false;
+            if (!is_string($source) || $source === '') {
+                throw new RuntimeException("Legacy media payload is missing: {$legacyHash}");
+            }
+            $normalized = $this->normalizeWebp(
+                $source,
+                (int) $record['width'],
+                (int) $record['height'],
+            );
+            $canonicalBytes = $normalized['bytes'];
+            $canonicalHash = hash('sha256', $canonicalBytes);
+            $canonicalPath = $this->privatePath($canonicalHash, 'webp');
+            if (!is_file($canonicalPath)) {
+                $this->atomicWrite($canonicalPath, $canonicalBytes);
+            }
+
+            $this->pdo->exec('BEGIN IMMEDIATE');
+            try {
+                if (hash_equals($legacyHash, $canonicalHash)) {
+                    $update = $this->pdo->prepare(
+                        "UPDATE media SET
+                            extension = 'webp',
+                            mime_type = 'image/webp',
+                            filename = :filename,
+                            size = :size,
+                            width = :width,
+                            height = :height
+                         WHERE hash = :hash"
+                    );
+                    $update->execute([
+                        'filename' => $this->safeFilename((string) $record['filename'], 'webp'),
+                        'size' => strlen($canonicalBytes),
+                        'width' => $normalized['width'],
+                        'height' => $normalized['height'],
+                        'hash' => $canonicalHash,
+                    ]);
+                    $this->addAlias($canonicalHash, $canonicalHash);
+                } else {
+                    $insert = $this->pdo->prepare(
+                        'INSERT OR IGNORE INTO media
+                            (hash, extension, mime_type, filename, size, width, height, created_at)
+                         VALUES (:hash, :extension, :mime, :filename, :size, :width, :height, :created_at)'
+                    );
+                    $insert->execute([
+                        'hash' => $canonicalHash,
+                        'extension' => 'webp',
+                        'mime' => 'image/webp',
+                        'filename' => $this->safeFilename((string) $record['filename'], 'webp'),
+                        'size' => strlen($canonicalBytes),
+                        'width' => $normalized['width'],
+                        'height' => $normalized['height'],
+                        'created_at' => (string) $record['created_at'],
+                    ]);
+
+                    $aliasUpdate = $this->pdo->prepare(
+                        'UPDATE media_aliases SET media_hash = :canonical WHERE media_hash = :legacy'
+                    );
+                    $aliasUpdate->execute(['canonical' => $canonicalHash, 'legacy' => $legacyHash]);
+                    $aliasInsert = $this->pdo->prepare(
+                        'INSERT OR IGNORE INTO media_aliases (legacy_id, media_hash)
+                         VALUES (:legacy_id, :canonical)'
+                    );
+                    foreach ([$legacyHash, $canonicalHash] as $alias) {
+                        $aliasInsert->execute(['legacy_id' => $alias, 'canonical' => $canonicalHash]);
+                    }
+
+                    $copyReferences = $this->pdo->prepare(
+                        'INSERT OR IGNORE INTO note_media (note_id, media_hash, role)
+                         SELECT note_id, :canonical, role FROM note_media WHERE media_hash = :legacy'
+                    );
+                    $copyReferences->execute(['canonical' => $canonicalHash, 'legacy' => $legacyHash]);
+                    $deleteReferences = $this->pdo->prepare(
+                        'DELETE FROM note_media WHERE media_hash = :legacy'
+                    );
+                    $deleteReferences->execute(['legacy' => $legacyHash]);
+                    $updateCovers = $this->pdo->prepare(
+                        'UPDATE notes SET cover_media_hash = :canonical WHERE cover_media_hash = :legacy'
+                    );
+                    $updateCovers->execute(['canonical' => $canonicalHash, 'legacy' => $legacyHash]);
+                    $deleteMedia = $this->pdo->prepare('DELETE FROM media WHERE hash = :legacy');
+                    $deleteMedia->execute(['legacy' => $legacyHash]);
+                }
+                $this->pdo->exec('COMMIT');
+            } catch (\Throwable $error) {
+                $this->pdo->exec('ROLLBACK');
+                throw $error;
+            }
+
+            if ($legacyPath !== $canonicalPath && is_file($legacyPath)) {
+                @unlink($legacyPath);
+            }
+            $converted++;
+            $bytesBefore += strlen($source);
+            $bytesAfter += strlen($canonicalBytes);
+        }
+
+        return [
+            'converted' => $converted,
+            'bytesBefore' => $bytesBefore,
+            'bytesAfter' => $bytesAfter,
+        ];
+    }
+
     /** @return list<string> */
     public function readableNoteIds(string $hash): array
     {
@@ -244,7 +392,87 @@ final class MediaStore
         if ($filename === '') {
             return 'image.' . $extension;
         }
-        return mb_substr($filename, 0, 180);
+        $stem = preg_replace('/\.[^.]+$/u', '', $filename) ?? $filename;
+        $stem = trim($stem);
+        if ($stem === '') {
+            $stem = 'image';
+        }
+        return mb_substr($stem, 0, 175) . '.' . $extension;
+    }
+
+    /** @return array{bytes:string,width:int,height:int} */
+    private function normalizeWebp(string $bytes, int $width, int $height): array
+    {
+        if (!function_exists('imagecreatefromstring') || !function_exists('imagewebp')) {
+            throw new RuntimeException('GD WebP support is required');
+        }
+        $source = @imagecreatefromstring($bytes);
+        if (!$source instanceof \GdImage) {
+            throw new HttpException(422, 'Image payload cannot be decoded');
+        }
+
+        $target = $source;
+        $targetWidth = min($width, self::MAX_WEBP_WIDTH);
+        $targetHeight = max(1, (int) round($height * ($targetWidth / $width)));
+        try {
+            if (!imageistruecolor($source)) {
+                imagepalettetotruecolor($source);
+            }
+            imagealphablending($source, false);
+            imagesavealpha($source, true);
+
+            if ($targetWidth !== $width) {
+                $target = imagecreatetruecolor($targetWidth, $targetHeight);
+                if (!$target instanceof \GdImage) {
+                    throw new RuntimeException('Unable to allocate resized image');
+                }
+                imagealphablending($target, false);
+                imagesavealpha($target, true);
+                $transparent = imagecolorallocatealpha($target, 0, 0, 0, 127);
+                imagefill($target, 0, 0, $transparent);
+                if (!imagecopyresampled(
+                    $target,
+                    $source,
+                    0,
+                    0,
+                    0,
+                    0,
+                    $targetWidth,
+                    $targetHeight,
+                    $width,
+                    $height,
+                )) {
+                    throw new RuntimeException('Unable to resize image');
+                }
+            }
+
+            $stream = fopen('php://temp', 'w+b');
+            if ($stream === false) {
+                throw new RuntimeException('Unable to allocate WebP output');
+            }
+            try {
+                if (!imagewebp($target, $stream, self::WEBP_QUALITY)) {
+                    throw new RuntimeException('Unable to encode WebP image');
+                }
+                rewind($stream);
+                $normalized = stream_get_contents($stream);
+            } finally {
+                fclose($stream);
+            }
+            if (!is_string($normalized) || $normalized === '') {
+                throw new RuntimeException('WebP encoder returned an empty payload');
+            }
+            return [
+                'bytes' => $normalized,
+                'width' => $targetWidth,
+                'height' => $targetHeight,
+            ];
+        } finally {
+            if ($target !== $source) {
+                imagedestroy($target);
+            }
+            imagedestroy($source);
+        }
     }
 
     private function atomicWrite(string $path, string $bytes): void

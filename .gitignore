@@ -8,6 +8,8 @@ out
 .DS_Store
 .serena
 .local
+.playwright-cli
+output
 tsconfig.tsbuildinfo
 sprinthost/app/vendor
 __pycache__

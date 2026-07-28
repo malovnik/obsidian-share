@@ -52,6 +52,42 @@ function assert_same(mixed $expected, mixed $actual, string $message = ''): void
     }
 }
 
+function test_image_bytes(string $format, int $seed): string
+{
+    $image = imagecreatetruecolor(2048, 1024);
+    if (!$image instanceof GdImage) {
+        throw new RuntimeException('Unable to create test image');
+    }
+    imagealphablending($image, false);
+    imagesavealpha($image, true);
+    $background = imagecolorallocatealpha(
+        $image,
+        35 + ($seed * 31) % 180,
+        55 + ($seed * 47) % 160,
+        75 + ($seed * 59) % 140,
+        $format === 'png' ? 28 : 0,
+    );
+    imagefill($image, 0, 0, $background);
+    $accent = imagecolorallocatealpha($image, 245, 245, 245, 0);
+    imagefilledellipse($image, 1024, 512, 900, 620, $accent);
+    imagestring($image, 5, 900, 500, strtoupper($format) . '-' . $seed, $background);
+
+    ob_start();
+    $written = match ($format) {
+        'jpeg' => imagejpeg($image, null, 96),
+        'png' => imagepng($image, null, 0),
+        'gif' => imagegif($image),
+        'webp' => imagewebp($image, null, 96),
+        default => false,
+    };
+    $bytes = ob_get_clean();
+    imagedestroy($image);
+    if (!$written || !is_string($bytes) || $bytes === '') {
+        throw new RuntimeException("Unable to encode {$format} test image");
+    }
+    return $bytes;
+}
+
 function remove_tree(string $path): void
 {
     if (!is_dir($path)) {
@@ -117,6 +153,23 @@ $runner->test('Legacy light visual system remains the release default', static f
     );
 });
 
+$runner->test('Admin cover controls preserve the compact icon design', static function (): void {
+    $sourceRoot = dirname(__DIR__, 2);
+    $controller = (string) file_get_contents($sourceRoot . '/app/src/AdminController.php');
+    $css = (string) file_get_contents($sourceRoot . '/public/assets/app.css');
+    $script = (string) file_get_contents($sourceRoot . '/public/assets/admin.js');
+    assert_true(str_contains($controller, 'data-cover-trigger'), 'Cover picker is not an icon action');
+    assert_true(str_contains($controller, 'class="admin-cover-input"'), 'Native cover input is not isolated');
+    assert_true(str_contains($controller, 'aria-label="{$coverActionLabel}'), 'Cover action lacks an accessible label');
+    assert_true(!str_contains($controller, '>Заменить обложку</button>'), 'Text cover button returned');
+    assert_true(!str_contains($controller, '>Убрать</button>'), 'Text cover remove button returned');
+    assert_true(
+        preg_match('/\\.admin-cover-input\\s*\\{[^}]*display:\\s*none/s', $css) === 1,
+        'Native Choose File control is visible',
+    );
+    assert_true(str_contains($script, 'requestSubmit()'), 'Cover selection does not submit automatically');
+});
+
 $runner->test('Markdown strips raw HTML and unsafe links', static function (): void {
     $renderer = new MarkdownRenderer();
     $html = $renderer->render("# Safe\n\n<script>alert(1)</script>\n\n[x](javascript:alert(1))");
@@ -159,30 +212,83 @@ $runner->test('Scoped publish token authenticates', static function () use ($app
     }
 });
 
-$runner->test('Identical media creates one payload', static function () use ($app, $pdo): void {
-    $png = base64_decode(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-        true,
+$runner->test('JPEG PNG GIF and WebP are normalized to bounded quality WebP', static function () use ($app, $pdo): void {
+    foreach (['jpeg', 'png', 'gif', 'webp'] as $seed => $format) {
+        $bytes = test_image_bytes($format, $seed + 1);
+        $sourceHash = hash('sha256', $bytes);
+        $first = $app->media()->store($bytes, $sourceHash, "sample.{$format}");
+        $second = $app->media()->store($bytes, $sourceHash, "copy.{$format}");
+        assert_same(false, $first['deduplicated'], "{$format} first upload was misreported");
+        assert_same(true, $second['deduplicated'], "{$format} duplicate was not detected");
+        assert_same($first['hash'], $second['hash'], "{$format} canonical hash changed");
+        assert_same('image/webp', $first['mimeType'], "{$format} was not converted to WebP");
+        assert_same('webp', $first['extension'], "{$format} extension was not normalized");
+        assert_same(1920, $first['width'], "{$format} width was not bounded");
+        assert_same(960, $first['height'], "{$format} aspect ratio changed");
+        $path = $app->media()->privatePath($first['hash'], $first['extension']);
+        $stored = (string) file_get_contents($path);
+        assert_same('RIFF', substr($stored, 0, 4), "{$format} output lacks RIFF signature");
+        assert_same('WEBP', substr($stored, 8, 4), "{$format} output lacks WebP signature");
+        assert_same($first['hash'], hash('sha256', $stored), "{$format} payload is not content-addressed");
+        assert_true($first['hash'] !== $sourceHash, "{$format} was stored without re-encoding");
+        if ($format === 'png') {
+            $GLOBALS['test_media_source_hash'] = $sourceHash;
+            $GLOBALS['test_media_canonical_hash'] = $first['hash'];
+        }
+    }
+    assert_same(4, (int) $pdo->query('SELECT COUNT(*) FROM media')->fetchColumn());
+});
+
+$runner->test('Legacy non-WebP payloads are migrated without breaking aliases', static function () use ($app, $pdo): void {
+    $legacy = test_image_bytes('png', 9);
+    $legacyHash = hash('sha256', $legacy);
+    $dimensions = getimagesizefromstring($legacy);
+    assert_true(is_array($dimensions));
+    $legacyPath = $app->media()->privatePath($legacyHash, 'png');
+    if (!is_dir(dirname($legacyPath))) {
+        mkdir(dirname($legacyPath), 0700, true);
+    }
+    file_put_contents($legacyPath, $legacy);
+    $statement = $pdo->prepare(
+        "INSERT INTO media
+            (hash, extension, mime_type, filename, size, width, height, created_at)
+         VALUES (:hash, 'png', 'image/png', 'legacy.png', :size, :width, :height, :created_at)"
     );
-    assert_true(is_string($png));
-    $hash = hash('sha256', $png);
-    $first = $app->media()->store($png, $hash, 'pixel.png');
-    $second = $app->media()->store($png, $hash, 'copy.png');
-    assert_same(false, $first['deduplicated']);
-    assert_same(true, $second['deduplicated']);
-    assert_same(1, (int) $pdo->query('SELECT COUNT(*) FROM media')->fetchColumn());
+    $statement->execute([
+        'hash' => $legacyHash,
+        'size' => strlen($legacy),
+        'width' => $dimensions[0],
+        'height' => $dimensions[1],
+        'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
+    ]);
+    $app->media()->addAlias($legacyHash, $legacyHash);
+
+    $result = $app->media()->normalizeLegacy();
+    $record = $app->media()->findByAlias($legacyHash);
+    assert_same(1, $result['converted']);
+    assert_true($result['bytesAfter'] < $result['bytesBefore'], 'Legacy PNG was not reduced');
+    assert_true(is_array($record), 'Legacy alias was lost');
+    assert_same('image/webp', $record['mime_type']);
+    assert_same('webp', $record['extension']);
+    assert_true(!is_file($legacyPath), 'Legacy payload was not removed');
+    assert_same(0, (int) $pdo->query("SELECT COUNT(*) FROM media WHERE mime_type != 'image/webp' OR extension != 'webp'")->fetchColumn());
+    assert_same(5, (int) $pdo->query('SELECT COUNT(*) FROM media')->fetchColumn());
 });
 
 $runner->test('Create renders a safe static article', static function () use ($app, $pdo): void {
+    $sourceHash = (string) $GLOBALS['test_media_source_hash'];
     $result = $app->publisher()->publish([
         'title' => 'Первая запись',
         'sourceId' => 'vault/first.md',
-        'content' => "# Заголовок\n\nТекст.\n\n<script>alert(1)</script>",
+        'content' => "# Заголовок\n\nТекст.\n\n![Обложка](/api/images/{$sourceHash})\n\n<script>alert(1)</script>",
         'accessMode' => 'public',
         'tags' => ['тест'],
+        'mediaHashes' => [$sourceHash],
     ], 'test');
     assert_same('created', $result['status']);
     assert_same(1, (int) $pdo->query('SELECT COUNT(*) FROM notes')->fetchColumn());
+    $coverHash = $pdo->query('SELECT cover_media_hash FROM notes LIMIT 1')->fetchColumn();
+    assert_same($GLOBALS['test_media_canonical_hash'], $coverHash, 'Source hash alias was not resolved');
     $path = $GLOBALS['root'] . '/public/generated/articles/' . $result['slug'] . '.html';
     assert_true(is_file($path), 'static article missing');
     $html = (string) file_get_contents($path);
@@ -191,12 +297,14 @@ $runner->test('Create renders a safe static article', static function () use ($a
 
 $runner->test('Unchanged publish creates no note revision', static function () use ($app, $pdo): void {
     $before = (int) $pdo->query('SELECT COUNT(*) FROM note_revisions')->fetchColumn();
+    $sourceHash = (string) $GLOBALS['test_media_source_hash'];
     $result = $app->publisher()->publish([
         'title' => 'Первая запись',
         'sourceId' => 'vault/first.md',
-        'content' => "# Заголовок\n\nТекст.\n\n<script>alert(1)</script>",
+        'content' => "# Заголовок\n\nТекст.\n\n![Обложка](/api/images/{$sourceHash})\n\n<script>alert(1)</script>",
         'accessMode' => 'public',
         'tags' => ['тест'],
+        'mediaHashes' => [$sourceHash],
     ], 'test');
     $after = (int) $pdo->query('SELECT COUNT(*) FROM note_revisions')->fetchColumn();
     assert_same('unchanged', $result['status']);

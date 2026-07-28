@@ -27,6 +27,12 @@ switch ($command) {
         fwrite(STDOUT, json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
         break;
 
+    case 'normalize-media':
+        $result = $app->media()->normalizeLegacy();
+        $app->generator()->rebuild();
+        fwrite(STDOUT, json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+        break;
+
     case 'status':
         $pdo = $app->database()->pdo();
         $counts = [
@@ -40,6 +46,6 @@ switch ($command) {
         break;
 
     default:
-        fwrite(STDOUT, "Usage: bin/console <init|rebuild|normalize-import|status>\n");
+        fwrite(STDOUT, "Usage: bin/console <init|rebuild|normalize-import|normalize-media|status>\n");
         exit($command === 'help' ? 0 : 2);
 }

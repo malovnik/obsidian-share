@@ -1250,8 +1250,9 @@ img {
 
 .admin-note {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
   border-bottom: 1px solid var(--gray-100);
   padding: 10px 0;
 }
@@ -1348,59 +1349,139 @@ img {
 }
 
 .admin-actions {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.admin-note:hover .admin-actions,
+.admin-note:focus-within .admin-actions {
+  opacity: 1;
 }
 
 .admin-actions form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   margin: 0;
 }
 
-.admin-actions form:nth-child(2) {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+.admin-access-form {
+  margin-right: 4px;
 }
 
-.admin-actions input[type="file"] {
-  min-width: 0;
-  padding: 5px;
+.admin-access-form select {
+  width: 112px;
+  min-height: 30px;
+  border-color: var(--gray-200);
+  padding: 4px 26px 4px 8px;
   font-size: 0.6875rem;
 }
 
-.admin-actions button {
-  min-height: 32px;
-  padding: 5px 9px;
-  font-size: 0.6875rem;
+.admin-cover-input {
+  display: none;
 }
 
-.admin-actions .danger,
-.admin-actions .danger-ghost {
-  border-color: var(--red);
+.admin-shell .admin-icon-action {
+  position: relative;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border: 0;
   background: transparent;
+  color: var(--gray-300);
+  padding: 7px;
+  line-height: 1;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.admin-shell .admin-icon-action:hover {
+  background: transparent;
+  color: var(--black);
+}
+
+.admin-shell .admin-icon-action:focus-visible {
+  outline: 2px solid var(--black);
+  outline-offset: 1px;
+}
+
+.admin-icon-action svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.admin-icon-action.cover-upload:hover,
+.admin-icon-action.access-save:hover,
+.admin-icon-action.restore:hover {
+  color: #2563eb;
+}
+
+.admin-icon-action.cover-remove:hover {
+  color: #f97316;
+}
+
+.admin-icon-action.trash:hover {
   color: var(--red);
 }
 
-.admin-actions .danger:hover,
-.admin-actions .danger-ghost:hover {
-  background: #fef2f2;
+.admin-icon-action.is-busy {
+  cursor: wait;
+  color: var(--gray-400);
+}
+
+.admin-icon-action.is-busy svg {
+  visibility: hidden;
+}
+
+.admin-icon-action.is-busy::after {
+  position: absolute;
+  inset: 7px;
+  border: 1px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 999px;
+  content: "";
+  animation: admin-spin 700ms linear infinite;
+}
+
+@keyframes admin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-cover-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .admin-actions details {
-  grid-column: 1 / -1;
+  position: relative;
   color: var(--red);
   font-size: 0.6875rem;
 }
 
 .admin-actions details[open] {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 
 .admin-actions summary {
-  grid-column: 1 / -1;
   cursor: pointer;
 }
 
@@ -1457,11 +1538,30 @@ img {
     grid-template-columns: 1fr;
   }
 
-  .admin-actions form,
-  .admin-actions form:nth-child(2) {
-    grid-template-columns: 1fr;
+  .admin-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    opacity: 1;
   }
 
+  .admin-shell .admin-icon-action {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 15px;
+  }
+
+  .admin-access-form select {
+    min-height: 44px;
+  }
+
+}
+
+@media (hover: none) {
+  .admin-actions {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -3,14 +3,15 @@
 Дата: 2026-07-28
 Рабочий URL: `https://read.malovnik.ru`
 Активный SprintHost release: `20260728T045110Z`
+Проверенный code/media hotfix: `20260728T065948Z` + `20260728T070856Z`
 
 ## Фактическое состояние
 
 - DNS и HTTPS ведут на SprintHost.
 - Public root: `/home/a0346120/domains/malovnik.ru/public_html/read`.
 - Private runtime/data: `/home/a0346120/domains/malovnik.ru/private/obsidian-share`.
-- 134 notes: 48 public, 65 private, 21 soft-deleted.
-- 15 content-addressed media payloads вместо 10 691 повторных PostgreSQL payloads.
+- 137 note rows с сохранёнными активными и soft-deleted записями.
+- 15 content-addressed WebP payloads вместо 10 691 повторных PostgreSQL payloads.
 - 10 722 legacy image aliases сохранены; старые image URL продолжают работать.
 - 141 article aliases сохраняют прежние `/s/...` URL.
 - Сырые IP из Railway `note_views` намеренно не переносились; агрегатные счётчики сохранены.
@@ -42,6 +43,27 @@
 - Неизменённая публикация создаёт ноль note revisions.
 - SQLite schema и runtime SQL совместимы со старой SQLite-библиотекой SprintHost.
 - Просмотры хранят только HMAC viewer hash + день; raw IP не записывается.
+- JPEG, PNG, GIF и входной WebP перекодируются через GD в WebP quality 82;
+  ширина ограничена 1920 px с сохранением пропорций.
+- Хэш и дедупликация считаются по фактически сохранённому WebP, а исходный
+  SHA-256 остаётся алиасом для совместимости с Obsidian plugin.
+- В админке восстановлены компактные SVG-иконки обложки и корзины; нативный
+  `Choose File` скрыт, выбор файла автоматически запускает загрузку.
+
+## Где находится база данных
+
+Production использует SQLite-файл:
+
+`/home/a0346120/domains/malovnik.ru/private/obsidian-share/data/obsidian-share.sqlite`
+
+Это приватный файл приложения за пределами `public_html`, а не управляемая
+MySQL/PostgreSQL-база SprintHost. Поэтому в разделе панели «Базы данных» она
+не показывается. После media hotfix: `PRAGMA integrity_check = ok`, 137 note
+rows, 15/15 media rows в WebP, битых `note_media` и `media_aliases` нет.
+
+Перед нормализацией создан и проверен SQLite online backup:
+
+`/home/a0346120/domains/malovnik.ru/private/obsidian-share/backups/before-media-normalize-20260728T070225Z.sqlite`
 
 ## Проверки release
 
@@ -73,16 +95,10 @@ and `data.json` mode is `0600`. The running plugin was toggled off/on in Obsidia
 the v2-only commands `Принудительно обновить текущую статью` and
 `Обновить изменённые опубликованные статьи` are active.
 
-## Railway standby and rollback
+## Railway и rollback
 
-Both Railway services have zero running instances:
-
-- `obsidian-share`;
-- `Postgres`.
-
-The project, deployment definitions and 2.6 GB PostgreSQL volume are retained as
-a reversible emergency standby. Compute billing should stop; retained volume
-storage may still be billed.
+Владелец удалил Railway project после переключения на SprintHost. Railway
+больше не является standby и не содержит актуальную production БД.
 
 Local immutable source backup:
 
@@ -94,13 +110,5 @@ SHA-256:
 
 The dump passed `pg_restore --list` and a disposable restore.
 
-Emergency Railway start:
-
-```sh
-railway scale --service obsidian-share asia-southeast1-eqsg3a=1
-railway scale --service Postgres asia-southeast1-eqsg3a=1
-```
-
-After both instances are healthy, DNS would need to be returned to the Railway
-origin. Do not delete the Railway project/volume until the agreed observation
-window is over.
+Текущий rollback для media hotfix — проверенный SQLite backup выше и локальные
+пофайловые FTP-копии в `.local/sprinthost/hotfix-backups/`.
