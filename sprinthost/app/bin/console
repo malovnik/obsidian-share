@@ -1,0 +1,45 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use ObsidianShare\Clock;
+
+require dirname(__DIR__) . '/bootstrap.php';
+
+$command = $argv[1] ?? 'help';
+$app = obsidian_share_app();
+
+switch ($command) {
+    case 'init':
+        $app->generator()->rebuild();
+        fwrite(STDOUT, "Initialized database and generated site.\n");
+        break;
+
+    case 'rebuild':
+        $app->generator()->rebuild();
+        fwrite(STDOUT, "Generated site rebuilt.\n");
+        break;
+
+    case 'normalize-import':
+        $result = $app->importNormalizer()->run();
+        $app->generator()->rebuild();
+        fwrite(STDOUT, json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+        break;
+
+    case 'status':
+        $pdo = $app->database()->pdo();
+        $counts = [
+            'notes' => (int) $pdo->query('SELECT COUNT(*) FROM notes')->fetchColumn(),
+            'active' => (int) $pdo->query('SELECT COUNT(*) FROM notes WHERE is_deleted = 0')->fetchColumn(),
+            'media' => (int) $pdo->query('SELECT COUNT(*) FROM media')->fetchColumn(),
+            'aliases' => (int) $pdo->query('SELECT COUNT(*) FROM media_aliases')->fetchColumn(),
+            'timestamp' => Clock::now(),
+        ];
+        fwrite(STDOUT, json_encode($counts, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+        break;
+
+    default:
+        fwrite(STDOUT, "Usage: bin/console <init|rebuild|normalize-import|status>\n");
+        exit($command === 'help' ? 0 : 2);
+}

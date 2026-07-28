@@ -28,422 +28,459 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian = require("obsidian");
 var DEFAULT_SETTINGS = {
-  apiUrl: "https://your-server.example.com",
+  apiUrl: "https://read.malovnik.ru",
+  publishToken: "",
   autoClipboard: true,
-  defaultExpiry: 0
+  defaultExpiry: 0,
+  syncOnSave: true,
+  mediaCache: {}
 };
 var SharePlugin = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
-    this.autoSyncInterval = null;
+    this.syncTimers = /* @__PURE__ */ new Map();
+    this.syncing = /* @__PURE__ */ new Set();
   }
   async onload() {
     await this.loadSettings();
     this.addCommand({
       id: "share-note",
       name: "\u041E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u0442\u044C \u0437\u0430\u043C\u0435\u0442\u043A\u0443",
-      callback: () => this.shareCurrentNote()
+      callback: () => void this.shareCurrentNote()
     });
     this.addCommand({
       id: "share-note-private",
       name: "\u041F\u043E\u0434\u0435\u043B\u0438\u0442\u044C\u0441\u044F \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E",
-      callback: () => this.sharePrivateNote()
+      callback: () => void this.sharePrivateNote()
     });
     this.addCommand({
       id: "update-current-note",
-      name: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0442\u0435\u043A\u0443\u0449\u0443\u044E \u0441\u0442\u0430\u0442\u044C\u044E \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435",
-      callback: () => this.updateCurrentNote()
+      name: "\u041F\u0440\u0438\u043D\u0443\u0434\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0442\u0435\u043A\u0443\u0449\u0443\u044E \u0441\u0442\u0430\u0442\u044C\u044E",
+      callback: () => void this.updateCurrentNote()
     });
     this.addCommand({
       id: "sync-shared-notes",
       name: "\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441\u0442\u0430\u0442\u0443\u0441 \u0441\u0442\u0430\u0442\u0435\u0439",
-      callback: () => this.syncSharedNotes()
+      callback: () => void this.syncSharedNotes()
     });
     this.addCommand({
       id: "auto-update-all",
-      name: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0432\u0441\u0435 \u043E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0430\u0442\u044C\u0438",
-      callback: () => this.autoUpdateAllNotes()
+      name: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u043E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0430\u0442\u044C\u0438",
+      callback: () => void this.autoUpdateAllNotes()
     });
-    this.addRibbonIcon("share", "\u041E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u0442\u044C \u0437\u0430\u043C\u0435\u0442\u043A\u0443", () => {
-      this.shareCurrentNote();
-    });
-    this.addRibbonIcon("lock", "\u041F\u043E\u0434\u0435\u043B\u0438\u0442\u044C\u0441\u044F \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E", () => {
-      this.sharePrivateNote();
-    });
+    this.addRibbonIcon("share", "\u041E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u0442\u044C \u0437\u0430\u043C\u0435\u0442\u043A\u0443", () => void this.shareCurrentNote());
+    this.addRibbonIcon("lock", "\u041F\u043E\u0434\u0435\u043B\u0438\u0442\u044C\u0441\u044F \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E", () => void this.sharePrivateNote());
     this.addSettingTab(new ShareSettingTab(this.app, this));
-    this.startAutoSync();
-    console.log("Share Plugin loaded");
+    this.registerEvent(this.app.vault.on("modify", (file) => {
+      void this.handleVaultModification(file);
+    }));
+    this.registerEvent(this.app.vault.on("rename", (file) => {
+      if (file instanceof import_obsidian.TFile && file.extension === "md") {
+        this.scheduleAutoSync(file);
+      }
+    }));
   }
   async shareCurrentNote() {
-    await this.shareNoteWithOptions(false);
-  }
-  async sharePrivateNote() {
-    await this.shareNoteWithOptions(true);
-  }
-  async shareNoteWithOptions(isPrivate) {
-    var _a;
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!activeFile) {
+    const file = this.app.workspace.getActiveFile();
+    if (!file) {
       new import_obsidian.Notice("\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0437\u0430\u043C\u0435\u0442\u043A\u0443 \u0434\u043B\u044F \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438");
       return;
     }
+    await this.shareNoteWithOptions(file, "public", true, false);
+  }
+  async sharePrivateNote() {
+    const file = this.app.workspace.getActiveFile();
+    if (!file) {
+      new import_obsidian.Notice("\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0437\u0430\u043C\u0435\u0442\u043A\u0443 \u0434\u043B\u044F \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438");
+      return;
+    }
+    await this.shareNoteWithOptions(file, "private", true, false);
+  }
+  async shareNoteWithOptions(file, accessMode, manual, force) {
+    var _a;
+    if (this.syncing.has(file.path)) {
+      return "skipped";
+    }
     try {
-      const mode = isPrivate ? "\u0421\u043E\u0437\u0434\u0430\u043D\u0438\u0435 \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E\u0439 \u0441\u0441\u044B\u043B\u043A\u0438" : "\u041F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u044F \u0437\u0430\u043C\u0435\u0442\u043A\u0438";
-      new import_obsidian.Notice(`${mode}...`);
-      let content = await this.app.vault.read(activeFile);
-      const title = activeFile.basename;
-      const sourceId = activeFile.path;
-      const customCss = this.extractThemeCss();
-      const cache = this.app.metadataCache.getFileCache(activeFile);
-      const existingShareId = (_a = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _a.share_id;
-      content = await this.processImages(content, activeFile);
-      const response = await this.shareNote(
-        title,
-        content,
-        sourceId,
-        customCss,
-        isPrivate,
-        existingShareId
-      );
-      if (response.success) {
-        await this.updateNoteFrontmatter(activeFile, response.url, isPrivate, response.id);
-        const action = response.isUpdate ? "\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0430" : "\u043E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043D\u0430";
-        const prefix = isPrivate ? "\u{1F512} \u041F\u0440\u0438\u0432\u0430\u0442\u043D\u0430\u044F \u0441\u0441\u044B\u043B\u043A\u0430" : "\u2705 \u0417\u0430\u043C\u0435\u0442\u043A\u0430";
+      this.assertConfigured();
+      this.syncing.add(file.path);
+      if (manual) {
+        new import_obsidian.Notice(accessMode === "private" ? "\u0421\u043E\u0437\u0434\u0430\u043D\u0438\u0435 \u0437\u0430\u043A\u0440\u044B\u0442\u043E\u0439 \u0441\u0441\u044B\u043B\u043A\u0438\u2026" : "\u041F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u044F \u0437\u0430\u043C\u0435\u0442\u043A\u0438\u2026");
+      }
+      const cache = this.app.metadataCache.getFileCache(file);
+      const frontmatter = (_a = cache == null ? void 0 : cache.frontmatter) != null ? _a : {};
+      const existingShareId = typeof frontmatter.share_id === "string" ? frontmatter.share_id : void 0;
+      const previousHash = typeof frontmatter.share_hash === "string" ? frontmatter.share_hash : void 0;
+      const source = this.stripShareMetadata(await this.app.vault.read(file));
+      const processed = await this.processImages(source, file);
+      const localHash = await this.hashString(JSON.stringify({
+        title: file.basename,
+        sourceId: file.path,
+        content: processed.content,
+        accessMode,
+        expiresInDays: this.settings.defaultExpiry,
+        mediaHashes: processed.mediaHashes
+      }));
+      if (!force && existingShareId && previousHash === localHash) {
+        if (manual) {
+          new import_obsidian.Notice("\u0417\u0430\u043C\u0435\u0442\u043A\u0430 \u043D\u0435 \u043C\u0435\u043D\u044F\u043B\u0430\u0441\u044C \u2014 \u0441\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u0442\u0440\u043E\u043D\u0443\u0442");
+        }
+        return "unchanged";
+      }
+      const response = await this.shareNote({
+        title: file.basename,
+        content: processed.content,
+        sourceId: file.path,
+        shareId: existingShareId,
+        accessMode,
+        mediaHashes: processed.mediaHashes,
+        expiresInDays: this.settings.defaultExpiry > 0 ? this.settings.defaultExpiry : null
+      });
+      await this.updateNoteFrontmatter(file, response, accessMode, localHash);
+      if (manual) {
+        const action = response.status === "created" ? "\u043E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043D\u0430" : response.status === "updated" ? "\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0430" : "\u0443\u0436\u0435 \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D\u0430";
         if (this.settings.autoClipboard) {
           await navigator.clipboard.writeText(response.url);
-          new import_obsidian.Notice(`${prefix} ${action}. \u0421\u0441\u044B\u043B\u043A\u0430 \u0441\u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0430: ${response.url}`, 5e3);
+          new import_obsidian.Notice(`\u0417\u0430\u043C\u0435\u0442\u043A\u0430 ${action}. \u0421\u0441\u044B\u043B\u043A\u0430 \u0441\u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0430: ${response.url}`, 5e3);
         } else {
-          new import_obsidian.Notice(`${prefix} ${action}: ${response.url}`, 5e3);
+          new import_obsidian.Notice(`\u0417\u0430\u043C\u0435\u0442\u043A\u0430 ${action}: ${response.url}`, 5e3);
         }
-      } else {
-        throw new Error("Server returned success: false");
       }
+      return response.status;
     } catch (error) {
-      console.error("SharePlugin: Share failed", error);
-      const errorMsg = error instanceof Error ? error.message : "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u0448\u0438\u0431\u043A\u0430";
-      new import_obsidian.Notice(`\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u0442\u044C: ${errorMsg}`, 7e3);
+      const message = error instanceof Error ? error.message : "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u0448\u0438\u0431\u043A\u0430";
+      if (manual) {
+        new import_obsidian.Notice(`\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u0442\u044C: ${message}`, 7e3);
+      } else {
+        console.warn(`SharePlugin: sync failed for ${file.path}: ${message}`);
+      }
+      return "error";
+    } finally {
+      this.syncing.delete(file.path);
     }
   }
-  /**
-   * Находит все ![[image]] в контенте, загружает на сервер, заменяет на ![](url)
-   */
   async processImages(content, sourceFile) {
-    const imageRegex = /!\[\[([^\]]+\.(png|jpg|jpeg|gif|bmp|svg|webp))\]\]/gi;
+    var _a;
+    const imageRegex = /!\[\[([^\]]+\.(?:png|jpe?g|gif|webp)(?:\|[^\]]*)?)\]\]/gi;
     const matches = [...content.matchAll(imageRegex)];
-    if (matches.length === 0)
-      return content;
-    new import_obsidian.Notice(`\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 ${matches.length} \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439...`);
-    let uploaded = 0;
+    const mediaHashes = [];
+    let cacheChanged = false;
     for (const match of matches) {
       const fullMatch = match[0];
-      const filename = match[1];
-      try {
-        const imageFile = this.resolveImageFile(filename, sourceFile);
-        if (!imageFile) {
-          console.warn(`SharePlugin: Image not found: ${filename}`);
-          continue;
-        }
-        const imageData = await this.app.vault.readBinary(imageFile);
-        const base64 = this.arrayBufferToBase64(imageData);
-        const response = await this.uploadImage(filename, base64);
-        if (response.success) {
-          content = content.replace(fullMatch, `![${filename}](${response.url})`);
-          uploaded++;
-        }
-      } catch (error) {
-        console.error(`SharePlugin: Failed to upload image ${filename}`, error);
+      const linkPath = match[1].split("|", 1)[0].trim();
+      const imageFile = this.resolveImageFile(linkPath, sourceFile);
+      if (!imageFile) {
+        throw new Error(`\u041D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u043E \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435: ${linkPath}`);
       }
+      const imageData = await this.app.vault.readBinary(imageFile);
+      const hash = await this.hashArrayBuffer(imageData);
+      mediaHashes.push(hash);
+      let url = (_a = this.settings.mediaCache[hash]) == null ? void 0 : _a.url;
+      if (!url) {
+        const uploaded = await this.uploadImage(imageFile, imageData, hash);
+        url = uploaded.url;
+        this.settings.mediaCache[hash] = { url, createdAt: Date.now() };
+        cacheChanged = true;
+      }
+      const alt = imageFile.basename.replace(/\]/g, "\\]");
+      content = content.split(fullMatch).join(`![${alt}](${url})`);
     }
-    if (uploaded > 0) {
-      new import_obsidian.Notice(`\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E ${uploaded}/${matches.length} \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439`);
+    if (cacheChanged) {
+      this.pruneMediaCache();
+      await this.saveSettings();
     }
-    return content;
+    return {
+      content,
+      mediaHashes: [...new Set(mediaHashes)]
+    };
   }
-  /**
-   * Находит файл изображения в vault по имени.
-   * Obsidian ищет в нескольких местах: рядом с файлом, в корне, в Cache/
-   */
   resolveImageFile(filename, sourceFile) {
     var _a;
+    const linked = this.app.metadataCache.getFirstLinkpathDest(filename, sourceFile.path);
+    if (linked instanceof import_obsidian.TFile) {
+      return linked;
+    }
     const sourceDir = ((_a = sourceFile.parent) == null ? void 0 : _a.path) || "";
     const candidates = [
-      `${sourceDir}/${filename}`,
+      sourceDir ? `${sourceDir}/${filename}` : filename,
       filename,
       `Cache/${filename}`,
       `Attachments/${filename}`
     ];
     for (const path of candidates) {
       const file = this.app.vault.getAbstractFileByPath(path);
-      if (file instanceof import_obsidian.TFile)
+      if (file instanceof import_obsidian.TFile) {
         return file;
+      }
     }
-    const allFiles = this.app.vault.getFiles();
-    const found = allFiles.find((f) => f.name === filename);
-    if (found instanceof import_obsidian.TFile)
-      return found;
-    return null;
+    const found = this.app.vault.getFiles().find((file) => file.name === filename);
+    return found instanceof import_obsidian.TFile ? found : null;
   }
-  arrayBufferToBase64(buffer) {
-    const bytes = new Uint8Array(buffer);
-    let binary = "";
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-  }
-  async uploadImage(filename, base64Data) {
-    const url = `${this.settings.apiUrl}/api/images`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename, data: base64Data })
+  async uploadImage(file, data, hash) {
+    const response = await fetch(`${this.apiUrl()}/api/v1/media/${hash}`, {
+      method: "PUT",
+      headers: {
+        ...this.authHeaders(),
+        "Content-Type": this.imageMime(file.extension),
+        "X-Filename": encodeURIComponent(file.name)
+      },
+      body: data
     });
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Image upload failed: HTTP ${response.status}: ${errorText}`);
+      throw new Error(await this.responseError(response, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435"));
     }
     return await response.json();
   }
-  extractThemeCss() {
-    try {
-      const bodyStyle = getComputedStyle(document.body);
-      const vars = {
-        bgPrimary: bodyStyle.getPropertyValue("--background-primary").trim(),
-        bgSecondary: bodyStyle.getPropertyValue("--background-secondary").trim(),
-        textNormal: bodyStyle.getPropertyValue("--text-normal").trim(),
-        textMuted: bodyStyle.getPropertyValue("--text-muted").trim(),
-        textAccent: bodyStyle.getPropertyValue("--text-accent").trim(),
-        linkColor: bodyStyle.getPropertyValue("--link-color").trim(),
-        linkHover: bodyStyle.getPropertyValue("--link-color-hover").trim(),
-        codeBackground: bodyStyle.getPropertyValue("--code-background").trim(),
-        codeNormal: bodyStyle.getPropertyValue("--code-normal").trim(),
-        h1Color: bodyStyle.getPropertyValue("--h1-color").trim(),
-        h2Color: bodyStyle.getPropertyValue("--h2-color").trim(),
-        h3Color: bodyStyle.getPropertyValue("--h3-color").trim(),
-        h4Color: bodyStyle.getPropertyValue("--h4-color").trim(),
-        h5Color: bodyStyle.getPropertyValue("--h5-color").trim(),
-        h6Color: bodyStyle.getPropertyValue("--h6-color").trim(),
-        blockquoteBorder: bodyStyle.getPropertyValue("--blockquote-border").trim(),
-        listMarker: bodyStyle.getPropertyValue("--list-marker-color").trim()
-      };
-      if (!vars.textNormal && !vars.h1Color && !vars.linkColor) {
-        console.warn("SharePlugin: No theme CSS variables found");
-        return "";
-      }
-      const cssRules = [];
-      if (vars.textNormal) {
-        cssRules.push(`.markdown-body { color: ${vars.textNormal} !important; }`);
-      }
-      if (vars.h1Color)
-        cssRules.push(`.markdown-body h1 { color: ${vars.h1Color} !important; }`);
-      if (vars.h2Color)
-        cssRules.push(`.markdown-body h2 { color: ${vars.h2Color} !important; }`);
-      if (vars.h3Color)
-        cssRules.push(`.markdown-body h3 { color: ${vars.h3Color} !important; }`);
-      if (vars.h4Color)
-        cssRules.push(`.markdown-body h4 { color: ${vars.h4Color} !important; }`);
-      if (vars.h5Color)
-        cssRules.push(`.markdown-body h5 { color: ${vars.h5Color} !important; }`);
-      if (vars.h6Color)
-        cssRules.push(`.markdown-body h6 { color: ${vars.h6Color} !important; }`);
-      if (vars.linkColor) {
-        cssRules.push(`.markdown-body a { color: ${vars.linkColor} !important; }`);
-      }
-      if (vars.linkHover) {
-        cssRules.push(`.markdown-body a:hover { color: ${vars.linkHover} !important; }`);
-      }
-      if (vars.codeBackground) {
-        cssRules.push(`.markdown-body code { background-color: ${vars.codeBackground} !important; }`);
-        cssRules.push(`.markdown-body pre { background-color: ${vars.codeBackground} !important; }`);
-      }
-      if (vars.codeNormal) {
-        cssRules.push(`.markdown-body code { color: ${vars.codeNormal} !important; }`);
-      }
-      if (vars.blockquoteBorder) {
-        cssRules.push(`.markdown-body blockquote { border-left-color: ${vars.blockquoteBorder} !important; }`);
-      }
-      if (vars.textMuted) {
-        cssRules.push(`.markdown-body blockquote { color: ${vars.textMuted} !important; }`);
-      }
-      if (vars.listMarker) {
-        cssRules.push(`.markdown-body ul li::marker { color: ${vars.listMarker} !important; }`);
-        cssRules.push(`.markdown-body ol li::marker { color: ${vars.listMarker} !important; }`);
-      }
-      if (vars.textAccent) {
-        cssRules.push(`.markdown-body strong { color: ${vars.textAccent} !important; }`);
-        cssRules.push(`.markdown-body em { color: ${vars.textAccent} !important; }`);
-      }
-      return cssRules.join("\n");
-    } catch (error) {
-      console.error("SharePlugin: Failed to extract theme CSS", error);
-      return "";
+  async shareNote(requestBody) {
+    const response = await fetch(`${this.apiUrl()}/api/v1/notes`, {
+      method: "POST",
+      headers: {
+        ...this.authHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody)
+    });
+    if (!response.ok) {
+      throw new Error(await this.responseError(response, "\u0421\u0435\u0440\u0432\u0435\u0440 \u043E\u0442\u043A\u043B\u043E\u043D\u0438\u043B \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u044E"));
     }
+    return await response.json();
   }
-  async shareNote(title, content, sourceId, customCss, noIndex = false, shareId) {
-    const url = `${this.settings.apiUrl}/api/share`;
-    const requestBody = {
-      title,
-      content,
-      sourceId,
-      expiresInDays: this.settings.defaultExpiry > 0 ? this.settings.defaultExpiry : null,
-      noIndex
-    };
-    if (shareId) {
-      requestBody.shareId = shareId;
-    }
-    if (customCss && customCss.trim()) {
-      requestBody.customCss = customCss;
-    }
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(requestBody)
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `HTTP ${response.status}: ${errorText || response.statusText}`
-        );
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("SharePlugin: API request failed", error);
-      throw error;
-    }
-  }
-  async updateNoteFrontmatter(file, shareUrl, isPrivate, shareId) {
+  async updateNoteFrontmatter(file, response, accessMode, localHash) {
     try {
       await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-        frontmatter.share_url = shareUrl;
-        frontmatter.share_mode = isPrivate ? "private \u{1F512}" : "public \u{1F513}";
-        if (shareId) {
-          frontmatter.share_id = shareId;
-        }
+        frontmatter.share_url = response.url;
+        frontmatter.share_mode = accessMode;
+        frontmatter.share_id = response.id;
+        frontmatter.share_hash = localHash;
+        frontmatter.share_revision = response.revision;
       });
-    } catch (error) {
-      console.error("SharePlugin: Failed to update frontmatter", error);
+    } catch (e) {
       new import_obsidian.Notice("\u0421\u0441\u044B\u043B\u043A\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0430, \u043D\u043E \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u043C\u0435\u0442\u0430\u0434\u0430\u043D\u043D\u044B\u0435 \u0437\u0430\u043C\u0435\u0442\u043A\u0438");
     }
   }
-  startAutoSync() {
-    this.autoSyncInterval = window.setInterval(
-      () => this.autoUpdateAllNotes(),
-      60 * 60 * 1e3
-    );
-    this.registerInterval(this.autoSyncInterval);
-  }
   async updateCurrentNote() {
-    var _a, _b, _c;
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!activeFile) {
+    var _a;
+    const file = this.app.workspace.getActiveFile();
+    if (!file) {
       new import_obsidian.Notice("\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0437\u0430\u043C\u0435\u0442\u043A\u0443 \u0434\u043B\u044F \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F");
       return;
     }
-    const cache = this.app.metadataCache.getFileCache(activeFile);
-    const shareUrl = (_a = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _a.share_url;
-    const shareMode = (_b = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _b.share_mode;
-    const existingShareId = (_c = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _c.share_id;
-    if (!shareUrl) {
-      new import_obsidian.Notice('\u042D\u0442\u0430 \u0437\u0430\u043C\u0435\u0442\u043A\u0430 \u043D\u0435 \u043E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043D\u0430. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 "\u041E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u0442\u044C \u0437\u0430\u043C\u0435\u0442\u043A\u0443".');
+    const frontmatter = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
+    if (typeof (frontmatter == null ? void 0 : frontmatter.share_url) !== "string") {
+      new import_obsidian.Notice("\u042D\u0442\u0430 \u0437\u0430\u043C\u0435\u0442\u043A\u0430 \u0435\u0449\u0451 \u043D\u0435 \u043E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043D\u0430");
       return;
     }
-    const isPrivate = typeof shareMode === "string" && shareMode.includes("private");
-    try {
-      new import_obsidian.Notice("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0441\u0442\u0430\u0442\u044C\u0438...");
-      let content = await this.app.vault.read(activeFile);
-      const title = activeFile.basename;
-      const sourceId = activeFile.path;
-      content = await this.processImages(content, activeFile);
-      const response = await this.shareNote(title, content, sourceId, void 0, isPrivate, existingShareId);
-      if (response.success) {
-        await this.updateNoteFrontmatter(activeFile, response.url, isPrivate, response.id);
-        new import_obsidian.Notice(`\u0421\u0442\u0430\u0442\u044C\u044F \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0430: ${response.url}`, 3e3);
-      }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043E\u0448\u0438\u0431\u043A\u0430";
-      new import_obsidian.Notice(`\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: ${msg}`, 5e3);
-    }
+    await this.shareNoteWithOptions(file, this.accessMode(frontmatter.share_mode), true, true);
   }
   async autoUpdateAllNotes() {
-    var _a, _b, _c;
-    const files = this.app.vault.getMarkdownFiles();
+    var _a;
+    try {
+      this.assertConfigured();
+    } catch (error) {
+      new import_obsidian.Notice(error instanceof Error ? error.message : "\u041F\u043B\u0430\u0433\u0438\u043D \u043D\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D");
+      return;
+    }
     let updated = 0;
+    let unchanged = 0;
     let errors = 0;
-    for (const file of files) {
-      const cache = this.app.metadataCache.getFileCache(file);
-      const shareUrl = (_a = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _a.share_url;
-      if (!shareUrl)
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      const frontmatter = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
+      if (typeof (frontmatter == null ? void 0 : frontmatter.share_url) !== "string") {
         continue;
-      const shareMode = (_b = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _b.share_mode;
-      const existingShareId = (_c = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _c.share_id;
-      const isPrivate = typeof shareMode === "string" && shareMode.includes("private");
+      }
+      const result = await this.shareNoteWithOptions(file, this.accessMode(frontmatter.share_mode), false, false);
+      if (result === "created" || result === "updated") updated++;
+      if (result === "unchanged" || result === "skipped") unchanged++;
+      if (result === "error") errors++;
+    }
+    new import_obsidian.Notice(`\u0418\u0437\u043C\u0435\u043D\u0435\u043D\u043E: ${updated}; \u0431\u0435\u0437 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439: ${unchanged}; \u043E\u0448\u0438\u0431\u043E\u043A: ${errors}`, 5e3);
+  }
+  async syncSharedNotes() {
+    var _a;
+    try {
+      this.assertConfigured();
+    } catch (error) {
+      new import_obsidian.Notice(error instanceof Error ? error.message : "\u041F\u043B\u0430\u0433\u0438\u043D \u043D\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D");
+      return;
+    }
+    new import_obsidian.Notice("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0441\u0442\u0430\u0442\u0443\u0441\u043E\u0432 \u0441\u0442\u0430\u0442\u0435\u0439\u2026");
+    let cleaned = 0;
+    let checked = 0;
+    let errors = 0;
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      const frontmatter = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
+      if (typeof (frontmatter == null ? void 0 : frontmatter.share_url) !== "string") {
+        continue;
+      }
+      checked++;
       try {
-        let content = await this.app.vault.read(file);
-        const title = file.basename;
-        const sourceId = file.path;
-        content = await this.processImages(content, file);
-        const response = await this.shareNote(title, content, sourceId, void 0, isPrivate, existingShareId);
-        if (response.success) {
-          await this.updateNoteFrontmatter(file, response.url, isPrivate, response.id);
-          updated++;
+        const url = `${this.apiUrl()}/api/v1/meta?sourceId=${encodeURIComponent(file.path)}`;
+        const response = await fetch(url, { headers: this.authHeaders() });
+        if (response.status === 404 || response.status === 410) {
+          await this.clearShareMetadata(file);
+          cleaned++;
+          continue;
+        }
+        if (!response.ok) {
+          errors++;
+          continue;
+        }
+        const meta = await response.json();
+        if (meta.isDeleted) {
+          await this.clearShareMetadata(file);
+          cleaned++;
         }
       } catch (e) {
         errors++;
       }
     }
-    if (updated > 0 || errors > 0) {
-      new import_obsidian.Notice(`\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E: ${updated}, \u043E\u0448\u0438\u0431\u043E\u043A: ${errors}`, 3e3);
-    }
+    new import_obsidian.Notice(`\u041F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u043E: ${checked}; \u043E\u0447\u0438\u0449\u0435\u043D\u043E: ${cleaned}; \u0441\u0435\u0442\u0435\u0432\u044B\u0445 \u043E\u0448\u0438\u0431\u043E\u043A: ${errors}`, 5e3);
   }
-  async syncSharedNotes() {
-    var _a;
-    new import_obsidian.Notice("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0441\u0442\u0430\u0442\u0443\u0441\u043E\u0432 \u0441\u0442\u0430\u0442\u0435\u0439...");
-    const files = this.app.vault.getMarkdownFiles();
-    let cleaned = 0;
-    let checked = 0;
-    for (const file of files) {
-      const cache = this.app.metadataCache.getFileCache(file);
-      const shareUrl = (_a = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _a.share_url;
-      if (!shareUrl)
+  async clearShareMetadata(file) {
+    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      delete frontmatter.share_url;
+      delete frontmatter.share_mode;
+      delete frontmatter.share_id;
+      delete frontmatter.share_hash;
+      delete frontmatter.share_revision;
+    });
+  }
+  async handleVaultModification(file) {
+    var _a, _b, _c;
+    if (!this.settings.syncOnSave || !this.settings.publishToken) {
+      return;
+    }
+    if (file instanceof import_obsidian.TFile && file.extension === "md") {
+      this.scheduleAutoSync(file);
+      return;
+    }
+    if (!(file instanceof import_obsidian.TFile) || !/^(png|jpe?g|gif|webp)$/i.test(file.extension)) {
+      return;
+    }
+    for (const note of this.app.vault.getMarkdownFiles()) {
+      const frontmatter = (_a = this.app.metadataCache.getFileCache(note)) == null ? void 0 : _a.frontmatter;
+      if (typeof (frontmatter == null ? void 0 : frontmatter.share_url) !== "string") {
         continue;
-      checked++;
-      const pathSegment = shareUrl.split("/s/").pop();
-      if (!pathSegment)
-        continue;
-      try {
-        const res = await fetch(
-          `${this.settings.apiUrl}/api/share/${pathSegment}/meta`
-        );
-        if (res.status === 404 || res.status === 410) {
-          await this.app.fileManager.processFrontMatter(file, (fm) => {
-            delete fm.share_url;
-            delete fm.share_mode;
-          });
-          cleaned++;
+      }
+      const embeds = (_c = (_b = this.app.metadataCache.getFileCache(note)) == null ? void 0 : _b.embeds) != null ? _c : [];
+      const referencesImage = embeds.some(
+        (embed) => {
+          var _a2;
+          return ((_a2 = this.app.metadataCache.getFirstLinkpathDest(embed.link, note.path)) == null ? void 0 : _a2.path) === file.path;
         }
-      } catch (e) {
+      );
+      if (referencesImage) {
+        this.scheduleAutoSync(note);
       }
     }
-    if (cleaned > 0) {
-      new import_obsidian.Notice(`\u041E\u0447\u0438\u0449\u0435\u043D\u043E ${cleaned} \u0438\u0437 ${checked} \u0437\u0430\u043C\u0435\u0442\u043E\u043A`, 5e3);
-    } else {
-      new import_obsidian.Notice(`\u041F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u043E ${checked} \u0437\u0430\u043C\u0435\u0442\u043E\u043A, \u0432\u0441\u0435 \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D\u044B`, 3e3);
+  }
+  scheduleAutoSync(file) {
+    var _a;
+    if (!this.settings.syncOnSave) {
+      return;
+    }
+    const frontmatter = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
+    if (typeof (frontmatter == null ? void 0 : frontmatter.share_url) !== "string") {
+      return;
+    }
+    const existing = this.syncTimers.get(file.path);
+    if (existing !== void 0) {
+      window.clearTimeout(existing);
+    }
+    const timer = window.setTimeout(() => {
+      this.syncTimers.delete(file.path);
+      void this.shareNoteWithOptions(file, this.accessMode(frontmatter.share_mode), false, false);
+    }, 1800);
+    this.syncTimers.set(file.path, timer);
+  }
+  stripShareMetadata(content) {
+    if (!content.startsWith("---\n") && !content.startsWith("---\r\n")) {
+      return content;
+    }
+    const normalized = content.replace(/\r\n/g, "\n");
+    const end = normalized.indexOf("\n---\n", 4);
+    if (end === -1) {
+      return content;
+    }
+    const frontmatter = normalized.slice(4, end).split("\n").filter((line) => !/^share_(?:url|mode|id|hash|revision):/.test(line));
+    return `---
+${frontmatter.join("\n")}
+---
+${normalized.slice(end + 5)}`;
+  }
+  accessMode(value) {
+    return typeof value === "string" && value.includes("private") ? "private" : "public";
+  }
+  authHeaders() {
+    return { Authorization: `Bearer ${this.settings.publishToken.trim()}` };
+  }
+  apiUrl() {
+    return this.settings.apiUrl.trim().replace(/\/+$/, "");
+  }
+  assertConfigured() {
+    const url = this.apiUrl();
+    if (!/^https:\/\//i.test(url) && !/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(url)) {
+      throw new Error("\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0439 HTTPS URL \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445");
+    }
+    if (this.settings.publishToken.trim().length < 32) {
+      throw new Error("\u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0442\u043E\u043A\u0435\u043D \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438 \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445 \u043F\u043B\u0430\u0433\u0438\u043D\u0430");
     }
   }
+  async hashArrayBuffer(buffer) {
+    const digest = await crypto.subtle.digest("SHA-256", buffer);
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  async hashString(value) {
+    return this.hashArrayBuffer(new TextEncoder().encode(value).buffer);
+  }
+  imageMime(extension) {
+    const normalized = extension.toLowerCase();
+    if (normalized === "jpg" || normalized === "jpeg") return "image/jpeg";
+    if (normalized === "png") return "image/png";
+    if (normalized === "gif") return "image/gif";
+    if (normalized === "webp") return "image/webp";
+    throw new Error(`\u041D\u0435\u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043C\u044B\u0439 \u0444\u043E\u0440\u043C\u0430\u0442 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F: ${extension}`);
+  }
+  async responseError(response, fallback) {
+    try {
+      const data = await response.json();
+      if (typeof data.error === "string" && data.error.length <= 240) {
+        return `${fallback}: ${data.error}`;
+      }
+    } catch (e) {
+    }
+    return `${fallback}: HTTP ${response.status}`;
+  }
+  pruneMediaCache() {
+    const entries = Object.entries(this.settings.mediaCache);
+    if (entries.length <= 1e3) {
+      return;
+    }
+    entries.sort(([, left], [, right]) => right.createdAt - left.createdAt);
+    this.settings.mediaCache = Object.fromEntries(entries.slice(0, 800));
+  }
+  async clearMediaCache() {
+    this.settings.mediaCache = {};
+    await this.saveSettings();
+    new import_obsidian.Notice("\u041A\u044D\u0448 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439 \u043E\u0447\u0438\u0449\u0435\u043D; \u0441\u0435\u0440\u0432\u0435\u0440 \u0432\u0441\u0451 \u0440\u0430\u0432\u043D\u043E \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0441\u0442 \u0434\u0443\u0431\u043B\u0438");
+  }
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const loaded = await this.loadData();
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...loaded != null ? loaded : {},
+      mediaCache: (loaded == null ? void 0 : loaded.mediaCache) && typeof loaded.mediaCache === "object" ? loaded.mediaCache : {}
+    };
+    this.settings.apiUrl = this.apiUrl();
   }
   async saveSettings() {
     await this.saveData(this.settings);
   }
   onunload() {
-    if (this.autoSyncInterval !== null) {
-      window.clearInterval(this.autoSyncInterval);
+    for (const timer of this.syncTimers.values()) {
+      window.clearTimeout(timer);
     }
-    console.log("Share Plugin unloaded");
+    this.syncTimers.clear();
   }
 };
 var ShareSettingTab = class extends import_obsidian.PluginSettingTab {
@@ -455,26 +492,35 @@ var ShareSettingTab = class extends import_obsidian.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438 \u0437\u0430\u043C\u0435\u0442\u043E\u043A" });
-    new import_obsidian.Setting(containerEl).setName("URL API \u0441\u0435\u0440\u0432\u0435\u0440\u0430").setDesc("\u0410\u0434\u0440\u0435\u0441 \u0432\u0430\u0448\u0435\u0433\u043E \u0441\u0435\u0440\u0432\u0435\u0440\u0430 (\u043D\u0430\u043F\u0440\u0438\u043C\u0435\u0440: https://your-server.example.com)").addText(
-      (text) => text.setPlaceholder("https://your-server.example.com").setValue(this.plugin.settings.apiUrl).onChange(async (value) => {
-        this.plugin.settings.apiUrl = value;
+    new import_obsidian.Setting(containerEl).setName("URL API \u0441\u0435\u0440\u0432\u0435\u0440\u0430").setDesc("\u0420\u0430\u0431\u043E\u0447\u0438\u0439 \u0430\u0434\u0440\u0435\u0441 \u0431\u043B\u043E\u0433\u0430 \u0438 API").addText((text) => text.setPlaceholder("https://read.malovnik.ru").setValue(this.plugin.settings.apiUrl).onChange(async (value) => {
+      this.plugin.settings.apiUrl = value.trim().replace(/\/+$/, "");
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u0422\u043E\u043A\u0435\u043D \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438").setDesc("\u0421\u0435\u043A\u0440\u0435\u0442\u043D\u044B\u0439 \u0442\u043E\u043A\u0435\u043D \u0441 \u043F\u0440\u0430\u0432\u0430\u043C\u0438 \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438. \u041E\u043D \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0445 \u0434\u0430\u043D\u043D\u044B\u0445 Obsidian.").addText((text) => {
+      text.inputEl.type = "password";
+      text.setPlaceholder("\u0412\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0442\u043E\u043A\u0435\u043D").setValue(this.plugin.settings.publishToken).onChange(async (value) => {
+        this.plugin.settings.publishToken = value.trim();
         await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian.Setting(containerEl).setName("\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0443").setDesc("\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0443 \u0432 \u0431\u0443\u0444\u0435\u0440 \u043E\u0431\u043C\u0435\u043D\u0430 \u043F\u043E\u0441\u043B\u0435 \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.autoClipboard).onChange(async (value) => {
-        this.plugin.settings.autoClipboard = value;
+      });
+    });
+    new import_obsidian.Setting(containerEl).setName("\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u0443\u044E \u0437\u0430\u043C\u0435\u0442\u043A\u0443 \u043F\u043E\u0441\u043B\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F").setDesc("\u0422\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u0430\u044F \u043E\u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043D\u043D\u0430\u044F \u0437\u0430\u043C\u0435\u0442\u043A\u0430; \u043F\u043E\u043B\u043D\u043E\u0433\u043E \u0447\u0430\u0441\u043E\u0432\u043E\u0433\u043E \u043E\u0431\u0445\u043E\u0434\u0430 vault \u0431\u043E\u043B\u044C\u0448\u0435 \u043D\u0435\u0442").addToggle((toggle) => toggle.setValue(this.plugin.settings.syncOnSave).onChange(async (value) => {
+      this.plugin.settings.syncOnSave = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0443").setDesc("\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0443 \u043F\u043E\u0441\u043B\u0435 \u0440\u0443\u0447\u043D\u043E\u0439 \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u0438").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoClipboard).onChange(async (value) => {
+      this.plugin.settings.autoClipboard = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u0421\u0440\u043E\u043A \u0436\u0438\u0437\u043D\u0438 \u0441\u0441\u044B\u043B\u043A\u0438 (\u0434\u043D\u0438)").setDesc("0 \u2014 \u0431\u0435\u0437 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u0438\u0441\u0442\u0435\u0447\u0435\u043D\u0438\u044F").addText((text) => text.setPlaceholder("0").setValue(String(this.plugin.settings.defaultExpiry)).onChange(async (value) => {
+      const parsed = Number.parseInt(value, 10);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        this.plugin.settings.defaultExpiry = Math.min(parsed, 3650);
         await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian.Setting(containerEl).setName("\u0421\u0440\u043E\u043A \u0436\u0438\u0437\u043D\u0438 \u0441\u0441\u044B\u043B\u043A\u0438 (\u0434\u043D\u0438)").setDesc("\u0427\u0435\u0440\u0435\u0437 \u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0434\u043D\u0435\u0439 \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0437\u0430\u043C\u0435\u0442\u043A\u0443 (0 = \u043D\u0438\u043A\u043E\u0433\u0434\u0430)").addText(
-      (text) => text.setPlaceholder("0").setValue(String(this.plugin.settings.defaultExpiry)).onChange(async (value) => {
-        const num = parseInt(value);
-        if (!isNaN(num) && num >= 0) {
-          this.plugin.settings.defaultExpiry = num;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
+      }
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u041A\u044D\u0448 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043D\u044B\u0445 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439").setDesc(`\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u043E \u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439: ${Object.keys(this.plugin.settings.mediaCache).length}`).addButton((button) => button.setButtonText("\u041E\u0447\u0438\u0441\u0442\u0438\u0442\u044C \u043A\u044D\u0448").onClick(async () => {
+      await this.plugin.clearMediaCache();
+      this.display();
+    }));
   }
 };

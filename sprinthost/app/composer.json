@@ -1,0 +1,25 @@
+{
+  "name": "malovnik/obsidian-share-sprinthost",
+  "description": "Low-resource Obsidian publishing backend for SprintHost",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": "^8.3",
+    "ext-fileinfo": "*",
+    "ext-json": "*",
+    "ext-pdo": "*",
+    "ext-pdo_sqlite": "*",
+    "league/commonmark": "^2.8"
+  },
+  "autoload": {
+    "psr-4": {
+      "ObsidianShare\\": "src/"
+    }
+  },
+  "config": {
+    "allow-plugins": {},
+    "classmap-authoritative": true,
+    "optimize-autoloader": true,
+    "sort-packages": true
+  }
+}

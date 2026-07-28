@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import PinCodeModal from './PinCodeModal';
 import ProgressBar from './ProgressBar';
@@ -17,53 +17,33 @@ interface Note {
 
 export default function PrivateNotePage({ noteId }: { noteId: string }) {
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const verified = sessionStorage.getItem('pincode_verified');
-    setIsUnlocked(verified === 'true');
-    setIsChecking(false);
-
-    if (verified === 'true') {
-      loadNote();
-    }
-  }, []);
-
-  const loadNote = async () => {
+  const loadNote = async (password: string): Promise<boolean> => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/share/${noteId}`);
+      const response = await fetch(`/api/share/${noteId}`, {
+        headers: { 'X-Note-Password': password },
+        cache: 'no-store',
+      });
       if (response.ok) {
         const data = await response.json();
         setNote(data);
+        setIsUnlocked(true);
+        return true;
       }
+      return false;
     } catch (error) {
       console.error('Failed to load note:', error);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSuccess = () => {
-    setIsUnlocked(true);
-    loadNote();
-  };
-
-  if (isChecking) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Проверка доступа...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (!isUnlocked) {
-    return <PinCodeModal onSuccess={handleSuccess} />;
+    return <PinCodeModal onSubmit={loadNote} />;
   }
 
   if (loading || !note) {

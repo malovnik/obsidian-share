@@ -1,0 +1,41 @@
+Options -Indexes
+DirectoryIndex index.php
+
+RewriteEngine On
+
+RewriteRule "(^|/)\." - [F,L]
+
+RewriteRule ^$ generated/index.html [L]
+RewriteRule ^sitemap\.xml$ generated/sitemap.xml [L]
+RewriteRule ^feed\.xml$ generated/feed.xml [L]
+RewriteRule ^search-index\.json$ generated/search-index.json [L]
+
+RewriteCond %{DOCUMENT_ROOT}/generated/articles/$1.html -f
+RewriteRule ^s/([A-Za-z0-9_-]{1,180})$ generated/articles/$1.html [L]
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^ index.php [QSA,L]
+
+ErrorDocument 404 /generated/404.html
+
+<IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data: https://mc.yandex.ru https://mc.yandex.com; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' https://mc.yandex.ru; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/gif "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+</IfModule>

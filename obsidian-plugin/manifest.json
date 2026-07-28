@@ -1,9 +1,9 @@
 {
   "id": "obsidian-share-custom",
   "name": "Share to Your Server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "minAppVersion": "0.15.0",
-  "description": "Публикуйте заметки на свой сервер с кастомным доменом",
+  "description": "Безопасная публикация заметок на read.malovnik.ru без дублей и полного часового синка",
   "author": "Nikita Malov",
   "isDesktopOnly": false
 }

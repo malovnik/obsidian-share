@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const { id: rawId } = await params;
-    const password = request.nextUrl.searchParams.get('password');
+    const password = request.headers.get('x-note-password');
 
     const extractedId = isValidSlug(rawId) ? extractIdFromSlug(rawId) : rawId;
 

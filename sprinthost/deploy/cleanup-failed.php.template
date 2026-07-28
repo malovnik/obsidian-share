@@ -1,0 +1,72 @@
+<?php
+
+declare(strict_types=1);
+
+const CURRENT_RELEASE = '__CURRENT_RELEASE__';
+const REMOVE_RELEASES = __REMOVE_RELEASES__;
+const CLEANUP_TOKEN_SHA256 = '__CLEANUP_TOKEN_SHA256__';
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+
+function finish(array $payload, int $status = 200): never
+{
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    exit;
+}
+
+function remove_tree(string $path): int
+{
+    if (!is_dir($path)) {
+        return 0;
+    }
+    $removed = 0;
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST,
+    );
+    foreach ($iterator as $item) {
+        if ($item->isLink() || $item->isFile()) {
+            if (@unlink($item->getPathname())) {
+                $removed++;
+            }
+        } elseif ($item->isDir()) {
+            @rmdir($item->getPathname());
+        }
+    }
+    @rmdir($path);
+    return $removed;
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    finish(['error' => 'Not found'], 404);
+}
+$token = is_string($_POST['token'] ?? null) ? $_POST['token'] : '';
+if ($token === '' || !hash_equals(CLEANUP_TOKEN_SHA256, hash('sha256', $token))) {
+    finish(['error' => 'Not found'], 404);
+}
+unset($token, $_POST['token']);
+
+$domainRoot = dirname(__DIR__, 2);
+$privateRoot = $domainRoot . '/private/obsidian-share';
+$removed = [];
+foreach (REMOVE_RELEASES as $release) {
+    if (
+        !is_string($release)
+        || $release === CURRENT_RELEASE
+        || preg_match('/^\d{8}T\d{6}Z$/', $release) !== 1
+    ) {
+        finish(['error' => 'Unsafe cleanup target'], 409);
+    }
+    foreach (['failed', 'rollbacks'] as $kind) {
+        $target = $privateRoot . '/' . $kind . '/' . $release;
+        $removed[$kind . '/' . $release] = remove_tree($target);
+    }
+}
+
+$self = __FILE__;
+register_shutdown_function(static fn () => @unlink($self));
+finish(['success' => true, 'currentRelease' => CURRENT_RELEASE, 'removed' => $removed]);

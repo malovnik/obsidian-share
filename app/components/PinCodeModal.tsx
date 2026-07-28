@@ -3,15 +3,14 @@
 import { useState, useEffect } from 'react';
 
 interface PinCodeModalProps {
-  onSuccess: () => void;
+  onSubmit: (pin: string) => Promise<boolean>;
 }
 
-const CORRECT_PIN = '0880';
-
-export default function PinCodeModal({ onSuccess }: PinCodeModalProps) {
+export default function PinCodeModal({ onSubmit }: PinCodeModalProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -20,13 +19,12 @@ export default function PinCodeModal({ onSuccess }: PinCodeModalProps) {
     };
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (pin === CORRECT_PIN) {
-      sessionStorage.setItem('pincode_verified', 'true');
-      onSuccess();
-    } else {
+    setSubmitting(true);
+    const accepted = await onSubmit(pin);
+    setSubmitting(false);
+    if (!accepted) {
       setError(true);
       setShake(true);
       setTimeout(() => setShake(false), 500);
@@ -82,10 +80,10 @@ export default function PinCodeModal({ onSuccess }: PinCodeModalProps) {
 
           <button
             type="submit"
-            disabled={pin.length !== 4}
+            disabled={pin.length !== 4 || submitting}
             className="w-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium py-3 px-6 rounded-none transition-colors"
           >
-            {pin.length === 4 ? 'Открыть' : 'Введите 4 цифры'}
+            {submitting ? 'Проверяю…' : pin.length === 4 ? 'Открыть' : 'Введите 4 цифры'}
           </button>
         </form>
 

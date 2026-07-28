@@ -1,0 +1,214 @@
+<?php
+
+declare(strict_types=1);
+
+const RELEASE_ID = '__RELEASE_ID__';
+const ARCHIVE_NAME = '__ARCHIVE_NAME__';
+const ARCHIVE_SHA256 = '__ARCHIVE_SHA256__';
+const ACTIVATION_TOKEN_SHA256 = '__ACTIVATION_TOKEN_SHA256__';
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+
+function result(array $payload, int $status = 200): never
+{
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    exit;
+}
+
+function remove_tree(string $path): void
+{
+    if (!is_dir($path)) {
+        return;
+    }
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST,
+    );
+    foreach ($iterator as $item) {
+        $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+    }
+    @rmdir($path);
+}
+
+function move_directory_contents(string $source, string $destination, array $exclude = []): array
+{
+    if (!is_dir($destination) && !mkdir($destination, 0700, true) && !is_dir($destination)) {
+        throw new RuntimeException('Unable to create destination directory');
+    }
+    $moved = [];
+    foreach (new DirectoryIterator($source) as $item) {
+        if ($item->isDot() || in_array($item->getFilename(), $exclude, true)) {
+            continue;
+        }
+        $target = $destination . '/' . $item->getFilename();
+        if (!rename($item->getPathname(), $target)) {
+            throw new RuntimeException('Unable to move deployment item');
+        }
+        $moved[] = $item->getFilename();
+    }
+    return $moved;
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    result(['error' => 'Not found'], 404);
+}
+$token = is_string($_POST['token'] ?? null) ? $_POST['token'] : '';
+if ($token === '' || !hash_equals(ACTIVATION_TOKEN_SHA256, hash('sha256', $token))) {
+    result(['error' => 'Not found'], 404);
+}
+unset($token, $_POST['token']);
+
+$publicRoot = __DIR__;
+$domainRoot = dirname(__DIR__, 2);
+$archivePath = $domainRoot . '/' . ARCHIVE_NAME;
+$privateRoot = $domainRoot . '/private/obsidian-share';
+$rollbackRoot = $privateRoot . '/rollbacks/' . RELEASE_ID;
+$stagingRoot = $domainRoot . '/.obsidian-deploy-' . RELEASE_ID;
+$installerName = basename(__FILE__);
+
+if (!is_file($archivePath) || !hash_equals(ARCHIVE_SHA256, (string) hash_file('sha256', $archivePath))) {
+    result(['error' => 'Release archive verification failed'], 409);
+}
+if (file_exists($stagingRoot) || file_exists($rollbackRoot)) {
+    result(['error' => 'Release identifier was already used'], 409);
+}
+
+$publicActivated = [];
+$activated = false;
+$stage = 'initialize';
+try {
+    $stage = 'create-staging';
+    if (!mkdir($stagingRoot, 0700, true)) {
+        throw new RuntimeException('Unable to create deployment staging directory');
+    }
+    $stage = 'extract-archive';
+    $archive = new PharData($archivePath);
+    $archive->extractTo($stagingRoot, null, true);
+
+    $stage = 'verify-manifest';
+    $manifestPath = $stagingRoot . '/manifest.json';
+    $manifest = json_decode((string) file_get_contents($manifestPath), true, 64, JSON_THROW_ON_ERROR);
+    if (!is_array($manifest['files'] ?? null)) {
+        throw new RuntimeException('Release manifest is invalid');
+    }
+    foreach ($manifest['files'] as $relative => $expectedHash) {
+        if (!is_string($relative) || str_contains($relative, '..') || str_starts_with($relative, '/')) {
+            throw new RuntimeException('Unsafe path in release manifest');
+        }
+        $file = $stagingRoot . '/' . $relative;
+        $actualHash = is_file($file) ? (string) hash_file('sha256', $file) : 'missing';
+        if (!is_string($expectedHash) || !hash_equals($expectedHash, $actualHash)) {
+            throw new RuntimeException(
+                'Release file verification failed: ' . $relative
+                . ' expected=' . substr((string) $expectedHash, 0, 12)
+                . ' actual=' . substr($actualHash, 0, 12)
+            );
+        }
+    }
+    foreach (['app', 'data', 'public'] as $directory) {
+        if (!is_dir($stagingRoot . '/' . $directory)) {
+            throw new RuntimeException('Release directory is missing');
+        }
+    }
+    if (!is_file($stagingRoot . '/config.php')) {
+        throw new RuntimeException('Release config is missing');
+    }
+
+    $stage = 'prepare-rollback';
+    if (!is_dir($rollbackRoot . '/public') && !mkdir($rollbackRoot . '/public', 0700, true)) {
+        throw new RuntimeException('Unable to create rollback directory');
+    }
+    if (is_dir($privateRoot . '/current')) {
+        rename($privateRoot . '/current', $rollbackRoot . '/app');
+    }
+    if (is_dir($privateRoot . '/data')) {
+        rename($privateRoot . '/data', $rollbackRoot . '/data');
+    }
+    if (is_file($privateRoot . '/config.php')) {
+        rename($privateRoot . '/config.php', $rollbackRoot . '/config.php');
+    }
+    move_directory_contents($publicRoot, $rollbackRoot . '/public', [$installerName]);
+    $activated = true;
+
+    $stage = 'activate-private-files';
+    if (!is_dir($privateRoot) && !mkdir($privateRoot, 0700, true) && !is_dir($privateRoot)) {
+        throw new RuntimeException('Unable to create private application directory');
+    }
+    if (
+        !rename($stagingRoot . '/app', $privateRoot . '/current')
+        || !rename($stagingRoot . '/data', $privateRoot . '/data')
+        || !rename($stagingRoot . '/config.php', $privateRoot . '/config.php')
+    ) {
+        throw new RuntimeException('Unable to activate private application files');
+    }
+    chmod($privateRoot . '/config.php', 0600);
+    chmod($privateRoot . '/data/obsidian-share.sqlite', 0600);
+    $stage = 'activate-public-files';
+    $publicActivated = move_directory_contents($stagingRoot . '/public', $publicRoot, []);
+
+    $stage = 'bootstrap-application';
+    require $privateRoot . '/current/bootstrap.php';
+    $app = obsidian_share_app($privateRoot . '/config.php');
+    $stage = 'verify-database';
+    $pdo = $app->database()->pdo();
+    $counts = [
+        'notes' => (int) $pdo->query('SELECT count(*) FROM notes')->fetchColumn(),
+        'media' => (int) $pdo->query('SELECT count(*) FROM media')->fetchColumn(),
+        'integrity' => (string) $pdo->query('PRAGMA integrity_check')->fetchColumn(),
+    ];
+    if ($counts['notes'] < 1 || $counts['media'] < 1 || $counts['integrity'] !== 'ok') {
+        throw new RuntimeException('Activated database verification failed');
+    }
+    if (!is_file($publicRoot . '/generated/index.html')) {
+        throw new RuntimeException('Generated homepage is missing');
+    }
+
+    $stage = 'cleanup';
+    remove_tree($stagingRoot);
+    @unlink($archivePath);
+    register_shutdown_function(static function () use ($installerName, $publicRoot): void {
+        @unlink($publicRoot . '/' . $installerName);
+    });
+    result(['success' => true, 'release' => RELEASE_ID, 'counts' => $counts]);
+} catch (Throwable $error) {
+    if ($activated || $publicActivated !== []) {
+        $failedRoot = $privateRoot . '/failed/' . RELEASE_ID;
+        @mkdir($failedRoot . '/public', 0700, true);
+        foreach ($publicActivated as $name) {
+            if (file_exists($publicRoot . '/' . $name)) {
+                @rename($publicRoot . '/' . $name, $failedRoot . '/public/' . $name);
+            }
+        }
+        foreach (['current' => 'app', 'data' => 'data'] as $target => $failedName) {
+            if (is_dir($privateRoot . '/' . $target)) {
+                @rename($privateRoot . '/' . $target, $failedRoot . '/' . $failedName);
+            }
+        }
+        if (is_file($privateRoot . '/config.php')) {
+            @rename($privateRoot . '/config.php', $failedRoot . '/config.php');
+        }
+    }
+    if (is_dir($rollbackRoot . '/app')) {
+        @rename($rollbackRoot . '/app', $privateRoot . '/current');
+    }
+    if (is_dir($rollbackRoot . '/data')) {
+        @rename($rollbackRoot . '/data', $privateRoot . '/data');
+    }
+    if (is_file($rollbackRoot . '/config.php')) {
+        @rename($rollbackRoot . '/config.php', $privateRoot . '/config.php');
+    }
+    if (is_dir($rollbackRoot . '/public')) {
+        move_directory_contents($rollbackRoot . '/public', $publicRoot, []);
+    }
+    remove_tree($stagingRoot);
+    error_log('[obsidian-share-activate] ' . $error::class . ': ' . $error->getMessage());
+    result([
+        'error' => 'Activation failed and rollback was attempted',
+        'stage' => $stage,
+        'detail' => $error->getMessage(),
+    ], 500);
+}
