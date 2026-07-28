@@ -217,33 +217,35 @@ var SharePlugin = class extends import_obsidian.Plugin {
     return found instanceof import_obsidian.TFile ? found : null;
   }
   async uploadImage(file, data, hash) {
-    const response = await fetch(`${this.apiUrl()}/api/v1/media/${hash}`, {
+    const response = await (0, import_obsidian.requestUrl)({
+      url: `${this.apiUrl()}/api/v1/media/${hash}`,
       method: "PUT",
       headers: {
         ...this.authHeaders(),
-        "Content-Type": this.imageMime(file.extension),
         "X-Filename": encodeURIComponent(file.name)
       },
-      body: data
+      contentType: this.imageMime(file.extension),
+      body: data,
+      throw: false
     });
-    if (!response.ok) {
-      throw new Error(await this.responseError(response, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435"));
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(this.responseError(response, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435"));
     }
-    return await response.json();
+    return response.json;
   }
   async shareNote(requestBody) {
-    const response = await fetch(`${this.apiUrl()}/api/v1/notes`, {
+    const response = await (0, import_obsidian.requestUrl)({
+      url: `${this.apiUrl()}/api/v1/notes`,
       method: "POST",
-      headers: {
-        ...this.authHeaders(),
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(requestBody)
+      headers: this.authHeaders(),
+      contentType: "application/json",
+      body: JSON.stringify(requestBody),
+      throw: false
     });
-    if (!response.ok) {
-      throw new Error(await this.responseError(response, "\u0421\u0435\u0440\u0432\u0435\u0440 \u043E\u0442\u043A\u043B\u043E\u043D\u0438\u043B \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u044E"));
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(this.responseError(response, "\u0421\u0435\u0440\u0432\u0435\u0440 \u043E\u0442\u043A\u043B\u043E\u043D\u0438\u043B \u043F\u0443\u0431\u043B\u0438\u043A\u0430\u0446\u0438\u044E"));
     }
-    return await response.json();
+    return response.json;
   }
   async updateNoteFrontmatter(file, response, accessMode, localHash) {
     try {
@@ -315,17 +317,21 @@ var SharePlugin = class extends import_obsidian.Plugin {
       checked++;
       try {
         const url = `${this.apiUrl()}/api/v1/meta?sourceId=${encodeURIComponent(file.path)}`;
-        const response = await fetch(url, { headers: this.authHeaders() });
+        const response = await (0, import_obsidian.requestUrl)({
+          url,
+          headers: this.authHeaders(),
+          throw: false
+        });
         if (response.status === 404 || response.status === 410) {
           await this.clearShareMetadata(file);
           cleaned++;
           continue;
         }
-        if (!response.ok) {
+        if (response.status < 200 || response.status >= 300) {
           errors++;
           continue;
         }
-        const meta = await response.json();
+        const meta = response.json;
         if (meta.isDeleted) {
           await this.clearShareMetadata(file);
           cleaned++;
@@ -441,9 +447,9 @@ ${normalized.slice(end + 5)}`;
     if (normalized === "webp") return "image/webp";
     throw new Error(`\u041D\u0435\u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043C\u044B\u0439 \u0444\u043E\u0440\u043C\u0430\u0442 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F: ${extension}`);
   }
-  async responseError(response, fallback) {
+  responseError(response, fallback) {
     try {
-      const data = await response.json();
+      const data = response.json;
       if (typeof data.error === "string" && data.error.length <= 240) {
         return `${fallback}: ${data.error}`;
       }

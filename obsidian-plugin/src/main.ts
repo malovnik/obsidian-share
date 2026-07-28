@@ -1,4 +1,4 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, TFile, TAbstractFile } from 'obsidian';
+import { App, Notice, Plugin, PluginSettingTab, Setting, TFile, TAbstractFile, requestUrl, type RequestUrlResponse } from 'obsidian';
 
 interface SharePluginSettings {
   apiUrl: string;
@@ -271,34 +271,36 @@ export default class SharePlugin extends Plugin {
   }
 
   private async uploadImage(file: TFile, data: ArrayBuffer, hash: string): Promise<ImageUploadResponse> {
-    const response = await fetch(`${this.apiUrl()}/api/v1/media/${hash}`, {
+    const response = await requestUrl({
+      url: `${this.apiUrl()}/api/v1/media/${hash}`,
       method: 'PUT',
       headers: {
         ...this.authHeaders(),
-        'Content-Type': this.imageMime(file.extension),
         'X-Filename': encodeURIComponent(file.name),
       },
+      contentType: this.imageMime(file.extension),
       body: data,
+      throw: false,
     });
-    if (!response.ok) {
-      throw new Error(await this.responseError(response, 'Не удалось загрузить изображение'));
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(this.responseError(response, 'Не удалось загрузить изображение'));
     }
-    return await response.json() as ImageUploadResponse;
+    return response.json as ImageUploadResponse;
   }
 
   private async shareNote(requestBody: ShareRequestBody): Promise<ShareResponse> {
-    const response = await fetch(`${this.apiUrl()}/api/v1/notes`, {
+    const response = await requestUrl({
+      url: `${this.apiUrl()}/api/v1/notes`,
       method: 'POST',
-      headers: {
-        ...this.authHeaders(),
-        'Content-Type': 'application/json',
-      },
+      headers: this.authHeaders(),
+      contentType: 'application/json',
       body: JSON.stringify(requestBody),
+      throw: false,
     });
-    if (!response.ok) {
-      throw new Error(await this.responseError(response, 'Сервер отклонил публикацию'));
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(this.responseError(response, 'Сервер отклонил публикацию'));
     }
-    return await response.json() as ShareResponse;
+    return response.json as ShareResponse;
   }
 
   private async updateNoteFrontmatter(
@@ -378,17 +380,21 @@ export default class SharePlugin extends Plugin {
       checked++;
       try {
         const url = `${this.apiUrl()}/api/v1/meta?sourceId=${encodeURIComponent(file.path)}`;
-        const response = await fetch(url, { headers: this.authHeaders() });
+        const response = await requestUrl({
+          url,
+          headers: this.authHeaders(),
+          throw: false,
+        });
         if (response.status === 404 || response.status === 410) {
           await this.clearShareMetadata(file);
           cleaned++;
           continue;
         }
-        if (!response.ok) {
+        if (response.status < 200 || response.status >= 300) {
           errors++;
           continue;
         }
-        const meta = await response.json() as { isDeleted?: boolean; url?: string; revision?: number };
+        const meta = response.json as { isDeleted?: boolean; url?: string; revision?: number };
         if (meta.isDeleted) {
           await this.clearShareMetadata(file);
           cleaned++;
@@ -512,9 +518,9 @@ export default class SharePlugin extends Plugin {
     throw new Error(`Неподдерживаемый формат изображения: ${extension}`);
   }
 
-  private async responseError(response: Response, fallback: string): Promise<string> {
+  private responseError(response: RequestUrlResponse, fallback: string): string {
     try {
-      const data = await response.json() as { error?: unknown };
+      const data = response.json as { error?: unknown };
       if (typeof data.error === 'string' && data.error.length <= 240) {
         return `${fallback}: ${data.error}`;
       }
